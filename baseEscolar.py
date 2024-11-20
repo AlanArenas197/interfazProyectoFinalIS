@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 import mysql.connector
 from mysql.connector import Error
 #warn: Si se quiere ver los comentarios dinamicamente, instale 'BetterComments' en Visual Studio Code
-#warn 2: Si se quiere obtener la base de datos, abra este github:
+#warn 2: Si se quiere obtener la base de datos, abra este github: 
 
 class Conexion:
     def __init__(self):
@@ -36,13 +36,13 @@ class dbEscolar:
     def __init__(self):
         self.con = Conexion()
 
-    def verifyUsers(self, usuarios_id, password):
+    def verifyUsers(self, email, password):
         conn = self.con.open()
         if conn:
             cursor = conn.cursor()
-            sql = "SELECT * FROM usuarios WHERE usuarios_id = %s AND password = %s"
+            sql = "SELECT * FROM usuarios WHERE email = %s AND password = %s"
             try:
-                cursor.execute(sql, (usuarios_id, password))
+                cursor.execute(sql, (email, password))
                 row = cursor.fetchone()
                 return row
             except Error as e:
@@ -57,12 +57,36 @@ class Usuarios:
     def __init__(self, conexion):
         self.con = conexion
 
+    def email(self, email):
+        conn = self.con.open()
+        if not conn:
+            messagebox.showerror("Error de Conexión", "No se pudo conectar a la base de datos para verificar el email.")
+            return False
+
+        try:
+            cursor = conn.cursor()
+            sql = "SELECT COUNT(*) FROM usuarios WHERE email = %s"
+            cursor.execute(sql, (email,))
+            count = cursor.fetchone()[0]
+            return count > 0
+        except Error as e:
+            messagebox.showerror("Error", f"Error al verificar email: {e}")
+            return False
+        finally:
+            if conn.is_connected():
+                cursor.close()
+
     def save(self, usuario):
         conn = self.con.open()
         if conn:
+            if self.email(usuario['email']):
+                messagebox.showerror("Error", "El email ya está registrado.")
+                return
             cursor = conn.cursor()
-            sql = "INSERT INTO usuarios (nombre, apaterno, amaterno, email, username, password, perfil) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-            datos = (usuario['nombre'], usuario['apaterno'], usuario['amaterno'], usuario['email'], usuario['username'], usuario['password'], usuario['perfil'])
+            sql = """INSERT INTO usuarios (nombre, apaterno, amaterno, email, username, password, perfil) 
+                     VALUES (%s, %s, %s, %s, %s, %s, %s)"""
+            datos = (usuario['nombre'], usuario['apaterno'], usuario['amaterno'], usuario['email'], 
+                     usuario['username'], usuario['password'], usuario['perfil'])
             try:
                 cursor.execute(sql, datos)
                 conn.commit()
@@ -70,6 +94,7 @@ class Usuarios:
             except Error as e:
                 messagebox.showerror("Error", f"Error al guardar usuario: {e}")
             finally:
+                cursor.close()
                 self.con.close()
 
     def search(self, usuarios_id):
@@ -124,10 +149,31 @@ class Alumnos:
     def __init__(self, conexion):
         self.con = conexion
 
+    def email(self, email):
+        conn = self.con.open()
+        if not conn:
+            messagebox.showerror("Error de Conexión", "No se pudo conectar a la base de datos para verificar el email.")
+            return False
+        try:
+            cursor = conn.cursor()
+            sql = "SELECT COUNT(*) FROM alumnos WHERE email = %s"
+            cursor.execute(sql, (email,))
+            count = cursor.fetchone()[0]
+            return count > 0
+        except Error as e:
+            messagebox.showerror("Error", f"Error al verificar email: {e}")
+            return False
+        finally:
+            if conn.is_connected():
+                cursor.close()
+
     def save(self, alumno):
         conn = self.con.open()
         if conn:
             cursor = conn.cursor()
+            if self.email(alumno['email']):
+                messagebox.showerror("Error", "El email ya está registrado.")
+                return
             sql = "INSERT INTO alumnos (nombre, apaterno, amaterno, email, estado, fecha_nac, carrera, materia, password) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
             datos = (alumno['nombre'], alumno['apaterno'], alumno['amaterno'], alumno['email'], alumno['estado'], alumno['fecha_nac'], alumno['carrera'], alumno['materia'], alumno['password'])
             try:
@@ -190,11 +236,32 @@ class Alumnos:
 class Maestros:
     def __init__(self, conexion):
         self.con = conexion
+    
+    def email(self, email):
+        conn = self.con.open()
+        if not conn:
+            messagebox.showerror("Error de Conexión", "No se pudo conectar a la base de datos para verificar el email.")
+            return False
+        try:
+            cursor = conn.cursor()
+            sql = "SELECT COUNT(*) FROM maestros WHERE email = %s"
+            cursor.execute(sql, (email,))
+            count = cursor.fetchone()[0]
+            return count > 0
+        except Error as e:
+            messagebox.showerror("Error", f"Error al verificar email: {e}")
+            return False
+        finally:
+            if conn.is_connected():
+                cursor.close()
 
     def save(self, maestro):
         conn = self.con.open()
         if conn:
             cursor = conn.cursor()
+            if self.email(maestro['email']):
+                messagebox.showerror("Error", "El email ya está registrado.")
+                return
             sql = "INSERT INTO maestros (nombre, apaterno, amaterno, email, carrera, materia, grado_estudios) VALUES (%s, %s, %s, %s, %s, %s, %s)"
             datos = (maestro['nombre'], maestro['apaterno'], maestro['amaterno'], maestro['email'], maestro['carrera'], maestro['materia'], maestro['grado_estudios'])
             try:
@@ -251,19 +318,6 @@ class Maestros:
                 messagebox.showerror("Error", f"Error al eliminar el maestro: {e}")
             finally:
                 self.con.close()
-    
-    def show(self):
-        conn = self.conexion.open()
-        cursor = conn.cursor()
-        sql = "SELECT nombre FROM maestros"
-        try:
-            cursor.execute(sql)
-            return [row[0] for row in cursor.fetchall()]
-        except Error as e:
-            print(f"Error al mostrar maestros: {e}")
-            return []
-        finally:
-            self.conexion.close()
 
 #!-----------------------MATERIA-----------------------#
 
@@ -271,10 +325,31 @@ class Materias:
     def __init__(self, conexion):
         self.con = conexion
 
+    def assigment(self, asignatura):
+        conn = self.con.open()
+        if not conn:
+            messagebox.showerror("Error de Conexión", "No se pudo conectar a la base de datos para verificar la asignatura.")
+            return False
+        try:
+            cursor = conn.cursor()
+            sql = "SELECT COUNT(*) FROM materias WHERE asignatura = %s"
+            cursor.execute(sql, (asignatura,))
+            count = cursor.fetchone()[0]
+            return count > 0
+        except Error as e:
+            messagebox.showerror("Error", f"Error al verificar la asignatura: {e}")
+            return False
+        finally:
+            if conn.is_connected():
+                cursor.close()
+
     def save(self, materia):
         conn = self.con.open()
         if conn:
             cursor = conn.cursor()
+            if self.assigment(materia['asignatura']):
+                messagebox.showerror("Error", "La asignatura ya está registrada.")
+                return
             sql = "INSERT INTO materias (asignatura, creditos, semestre, carrera) VALUES (%s, %s, %s, %s)"
             datos = (materia['asignatura'], materia['creditos'], materia['semestre'], materia['carrera'])
             try:
@@ -331,30 +406,38 @@ class Materias:
                 messagebox.showerror("Error", f"Error al eliminar la materia: {e}")
             finally:
                 self.con.close()
-    
-    def show(self):
-        conn = self.conexion.open()
-        cursor = conn.cursor()
-        sql = "SELECT asignatura FROM materias"
-        try:
-            cursor.execute(sql)
-            return [row[0] for row in cursor.fetchall()]
-        except Error as e:
-            print(f"Error al mostrar materias: {e}")
-            return []
-        finally:
-            self.conexion.close()
 
 #!-----------------------GRUPOS-----------------------#
 
 class Grupos:
     def __init__(self, conexion):
         self.con = conexion
+    
+    def availability(self, horario, salon, nombre):
+        conn = self.con.open()
+        if not conn:
+            messagebox.showerror("Error de Conexión", "No se pudo conectar a la base de datos para verificar el grupo.")
+            return False
+        try:
+            cursor = conn.cursor()
+            sql = "SELECT COUNT(*) FROM grupos WHERE horario = %s AND salon = %s AND nombre = %s"
+            cursor.execute(sql, (horario, salon, nombre,))
+            count = cursor.fetchone()[0]
+            return count > 0
+        except Error as e:
+            messagebox.showerror("Error", f"Error al verificar la disponibilidad: {e}")
+            return False
+        finally:
+            if conn.is_connected():
+                cursor.close()
 
     def save(self, grupos):
         conn = self.con.open()
         if conn:
             cursor = conn.cursor()
+            if self.availability(grupos['horario'], grupos['salon'], grupos['nombre']):
+                messagebox.showerror("Error", "El grupo ya está registrado.")
+                return
             sql = "INSERT INTO grupos (nombre, fecha, carrera, materia, maestro, salon, horario, semestre, max_alumnos) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
             datos = (grupos['nombre'], grupos['fecha'], grupos['carrera'], grupos['materia'], grupos['maestro'], grupos['salon'], grupos['horario'], grupos['semestre'], grupos['max_alumnos'])
             try:
@@ -411,19 +494,6 @@ class Grupos:
                 messagebox.showerror("Error", f"Error al eliminar el grupo: {e}")
             finally:
                 self.con.close()
-    
-    def show(self):
-        conn = self.conexion.open()
-        cursor = conn.cursor()
-        sql = "SELECT nombre FROM grupos"
-        try:
-            cursor.execute(sql)
-            return [row[0] for row in cursor.fetchall()]
-        except Error as e:
-            print(f"Error al mostrar grupos: {e}")
-            return []
-        finally:
-            self.conexion.close()
 
 #!-----------------------HORARIO-----------------------#
 
@@ -431,10 +501,31 @@ class Horarios:
     def __init__(self, conexion):
         self.con = conexion
 
+    def availability(self, hora, turno):
+        conn = self.con.open()
+        if not conn:
+            messagebox.showerror("Error de Conexión", "No se pudo conectar a la base de datos para verificar el horario.")
+            return False
+        try:
+            cursor = conn.cursor()
+            sql = "SELECT COUNT(*) FROM horarios WHERE hora = %s AND turno = %s"
+            cursor.execute(sql, (hora, turno,))
+            count = cursor.fetchone()[0]
+            return count > 0
+        except Error as e:
+            messagebox.showerror("Error", f"Error al verificar la disponibilidad: {e}")
+            return False
+        finally:
+            if conn.is_connected():
+                cursor.close()
+
     def save(self, horario):
         conn = self.con.open()
         if conn:
             cursor = conn.cursor()
+            if self.availability(horario['hora'], horario['turno']):
+                messagebox.showerror("Error", "El horario ya está registrado.")
+                return
             sql = "INSERT INTO horarios (turno, hora) VALUES (%s, %s)"
             datos = (horario['turno'], horario['hora'])
             try:
@@ -465,6 +556,9 @@ class Horarios:
         conn = self.con.open()
         if conn:
             cursor = conn.cursor()
+            if self.availability(horario['hora'], horario['turno']):
+                messagebox.showerror("Error", "El horario ya está registrado.")
+                return
             sql = """UPDATE horarios 
                      SET turno = %s, hora = %s
                      WHERE horario_id = %s"""
@@ -492,6 +586,188 @@ class Horarios:
             finally:
                 self.con.close()
 
+#!-----------------------SALONES-----------------------#
+
+class Salones:
+    def __init__(self, conexion):
+        self.con = conexion
+
+    def availability(self, nombre, edificio):
+        conn = self.con.open()
+        if not conn:
+            messagebox.showerror("Error de Conexión", "No se pudo conectar a la base de datos para verificar el salon.")
+            return False
+        try:
+            cursor = conn.cursor()
+            sql = "SELECT COUNT(*) FROM salones WHERE nombre = %s AND edificio = %s"
+            cursor.execute(sql, (nombre, edificio,))
+            count = cursor.fetchone()[0]
+            return count > 0
+        except Error as e:
+            messagebox.showerror("Error", f"Error al verificar la disponibilidad: {e}")
+            return False
+        finally:
+            if conn.is_connected():
+                cursor.close()
+
+    def save(self, salon):
+        conn = self.con.open()
+        if conn:
+            cursor = conn.cursor()
+            if self.availability(salon['nombre'], salon['edificio']):
+                messagebox.showerror("Error", "El salon ya está registrado.")
+                return
+            sql = "INSERT INTO salones (nombre, edificio) VALUES (%s, %s)"
+            datos = (salon['nombre'], salon['edificio'])
+            try:
+                cursor.execute(sql, datos)
+                conn.commit()
+                messagebox.showinfo("Éxito", "Salon guardado correctamente.")
+            except Error as e:
+                messagebox.showerror("Error", f"Error al guardar salon: {e}")
+            finally:
+                self.con.close()
+
+    def search(self, salon_id):
+        conn = self.con.open()
+        if conn:
+            cursor = conn.cursor()
+            sql = "SELECT * FROM salones WHERE salon_id = %s"
+            try:
+                cursor.execute(sql, (salon_id,))
+                row = cursor.fetchone()
+                return row
+            except Error as e:
+                messagebox.showerror("Error", f"Error al buscar el salon: {e}")
+            finally:
+                self.con.close()
+        return None
+
+    def edit(self, salon):
+        conn = self.con.open()
+        if conn:
+            cursor = conn.cursor()
+            if self.availability(salon['nombre'], salon['edificio']):
+                messagebox.showerror("Error", "El horario ya está registrado.")
+                return
+            sql = """UPDATE horarios 
+                     SET nombre = %s, edificio = %s
+                     WHERE salon_id = %s"""
+            datos = (salon['nombre'], salon['edificio'], salon['salon_id'])
+            try:
+                cursor.execute(sql, datos)
+                conn.commit()
+                messagebox.showinfo("Éxito", "Salon editado correctamente.")
+            except Error as e:
+                messagebox.showerror("Error", f"Error al editar salon: {e}")
+            finally:
+                self.con.close()
+
+    def remove(self, salon_id):
+        conn = self.con.open()
+        if conn:
+            cursor = conn.cursor()
+            sql = "DELETE FROM salones WHERE salon_id = %s"
+            try:
+                cursor.execute(sql, (salon_id,))
+                conn.commit()
+                messagebox.showinfo("Éxito", "Salon eliminado correctamente.")
+            except Error as e:
+                messagebox.showerror("Error", f"Error al eliminar el salon: {e}")
+            finally:
+                self.con.close()
+
+#!-----------------------CARRERAS-----------------------#
+
+class Carreras:
+    def __init__(self, conexion):
+        self.con = conexion
+
+    def existence(self, nombre):
+        conn = self.con.open()
+        if not conn:
+            messagebox.showerror("Error de Conexión", "No se pudo conectar a la base de datos para verificar la carrera.")
+            return False
+        try:
+            cursor = conn.cursor()
+            sql = "SELECT COUNT(*) FROM carreras WHERE nombre = %s"
+            cursor.execute(sql, (nombre,))
+            count = cursor.fetchone()[0]
+            return count > 0
+        except Error as e:
+            messagebox.showerror("Error", f"Error al verificar la disponibilidad: {e}")
+            return False
+        finally:
+            if conn.is_connected():
+                cursor.close()
+
+    def save(self, carrera):
+        conn = self.con.open()
+        if conn:
+            cursor = conn.cursor()
+            if self.existence(carrera['nombre']):
+                messagebox.showerror("Error", "La carrera ya está registrada.")
+                return
+            sql = "INSERT INTO carreras (nombre, num_semestres) VALUES (%s, %s)"
+            datos = (carrera['nombre'], carrera['num_semestres'])
+            try:
+                cursor.execute(sql, datos)
+                conn.commit()
+                messagebox.showinfo("Éxito", "Carrera guardada correctamente.")
+            except Error as e:
+                messagebox.showerror("Error", f"Error al guardar carrera: {e}")
+            finally:
+                self.con.close()
+
+    def search(self, carrera_id):
+        conn = self.con.open()
+        if conn:
+            cursor = conn.cursor()
+            sql = "SELECT * FROM carreras WHERE carrera_id = %s"
+            try:
+                cursor.execute(sql, (carrera_id,))
+                row = cursor.fetchone()
+                return row
+            except Error as e:
+                messagebox.showerror("Error", f"Error al buscar la carrera: {e}")
+            finally:
+                self.con.close()
+        return None
+
+    def edit(self, carrera):
+        conn = self.con.open()
+        if conn:
+            cursor = conn.cursor()
+            if self.existence(carrera['nombre'], carrera['edificio']):
+                messagebox.showerror("Error", "La carrera ya está registrada.")
+                return
+            sql = """UPDATE carreras 
+                     SET nombre = %s, num_semestres = %s
+                     WHERE carrera_id = %s"""
+            datos = (carrera['nombre'], carrera['num_semestres'], carrera['carrera_id'])
+            try:
+                cursor.execute(sql, datos)
+                conn.commit()
+                messagebox.showinfo("Éxito", "Carrera editada correctamente.")
+            except Error as e:
+                messagebox.showerror("Error", f"Error al editar carrera: {e}")
+            finally:
+                self.con.close()
+
+    def remove(self, carrera_id):
+        conn = self.con.open()
+        if conn:
+            cursor = conn.cursor()
+            sql = "DELETE FROM carreras WHERE carrera_id = %s"
+            try:
+                cursor.execute(sql, (carrera_id,))
+                conn.commit()
+                messagebox.showinfo("Éxito", "Carrera eliminada correctamente.")
+            except Error as e:
+                messagebox.showerror("Error", f"Error al eliminar la carrera: {e}")
+            finally:
+                self.con.close()
+
 #?-----------------------LOGIN WINDOW-----------------------#
 
 class LoginWindow(tk.Toplevel):
@@ -500,8 +776,8 @@ class LoginWindow(tk.Toplevel):
         self.title("Login - Escolar")
         self.geometry("400x300")
 
-        ttk.Label(self, text="Codigo:").pack(pady=10)
-        self.codEntry = ttk.Entry(self)
+        ttk.Label(self, text="Email:").pack(pady=10)
+        self.codEntry = ttk.Entry(self, width=30)
         self.codEntry.pack(pady=5)
 
         ttk.Label(self, text="Password:").pack(pady=10)
@@ -514,11 +790,11 @@ class LoginWindow(tk.Toplevel):
         self.cancelBtn = ttk.Button(self, text="Cancel", command=self.cancelLogin)
 
     def verfLogin(self):
-        usuarios_id = self.codEntry.get()
+        email = self.codEntry.get()
         password = self.passEntry.get()
 
         db = dbEscolar()
-        cod = db.verifyUsers(usuarios_id, password)
+        cod = db.verifyUsers(email, password)
 
         if cod:
             nombre = cod[1]
@@ -537,7 +813,7 @@ class LoginWindow(tk.Toplevel):
 class Application(ttk.Frame):
     def __init__(self, mainWind, nombre, conexion):
         super().__init__(mainWind)
-        mainWind.title("Control Escolar " + nombre)
+        mainWind.title("Control Escolar - " + nombre)
         mainWind.geometry("850x500")
         
         self.usuarios = Usuarios(conexion)
@@ -546,6 +822,10 @@ class Application(ttk.Frame):
         self.materias = Materias(conexion)
         self.grupos = Grupos(conexion)
         self.horarios = Horarios(conexion)
+        self.salones = Salones(conexion)
+        self.carreras = Carreras(conexion)
+
+        #TODO: Carreras, salones, planeacion
 
         self.notebook = ttk.Notebook(self)
      
@@ -618,7 +898,7 @@ class Application(ttk.Frame):
         self.txIdAlumnoBuscar = ttk.Entry(pestanaAlumnos, width=30)
         self.txIdAlumnoBuscar.grid(row=0, column=1, padx=5, pady=5)
 
-        self.btnBuscarAlumno = ttk.Button(pestanaAlumnos, text="Buscar")
+        self.btnBuscarAlumno = ttk.Button(pestanaAlumnos, text="Buscar", command=self.buscarAlumno)
         self.btnBuscarAlumno.grid(row=0, column=2, padx=5, pady=5)
 
         ttk.Label(pestanaAlumnos, text="Nombre:").grid(row=1, column=0, sticky="e")
@@ -652,6 +932,8 @@ class Application(ttk.Frame):
         self.carreraComboAlumno = ttk.Combobox(pestanaAlumnos, values=["Seleccione", "Ingeniería", "Licenciatura"], width=28)
         self.carreraComboAlumno.grid(row=3, column=3, pady=5)
         self.carreraComboAlumno.set("Seleccione")
+        self.cargarCarreraAlumno()
+        self.carreraComboAlumno.bind("<<ComboboxSelected>>", self.actualizarCarreraAlumno)
 
         ttk.Label(pestanaAlumnos, text="Email:").grid(row=4, column=0, sticky="e")
         self.txEmailAlumno = ttk.Entry(pestanaAlumnos, width=30)
@@ -663,31 +945,33 @@ class Application(ttk.Frame):
             "Inteligencia Artificial 1", "Ingeniería de Software 1"], width=28)
         self.materiaComboAlumno.grid(row=4, column=3, pady=5)
         self.materiaComboAlumno.set("Seleccione")
+        self.cargarMateriasAlumno()
+        self.materiaComboAlumno.bind("<<ComboboxSelected>>", self.actualizarMateriasAlumno)
 
         ttk.Label(pestanaAlumnos, text="Contraseña:").grid(row=5, column=0, sticky="e")
         self.txPasswordAlumno = ttk.Entry(pestanaAlumnos, width=30)
         self.txPasswordAlumno.grid(row=5, column=1, pady=5)
 
-        self.btnAgregarMateriaAlumno = ttk.Button(pestanaAlumnos, text="Agregar")
+        self.btnAgregarMateriaAlumno = ttk.Button(pestanaAlumnos, text="Agregar", command=self.agregarMateriaAlumno)
         self.btnAgregarMateriaAlumno.grid(row=5, column=3, padx=5, pady=5)
 
         self.treeMateriaAlumno = ttk.Treeview(pestanaAlumnos, columns=("Nombre"), show="headings", height=6)
         self.treeMateriaAlumno.heading("Nombre", text="Nombre")
         self.treeMateriaAlumno.grid(row=6, column=3, pady=5)
 
-        self.btnNuevoAlumno = ttk.Button(pestanaAlumnos, text="Nuevo")
+        self.btnNuevoAlumno = ttk.Button(pestanaAlumnos, text="Nuevo", command=self.limpiarCamposAlumno)
         self.btnNuevoAlumno.grid(row=8, column=0, padx=10, pady=10, sticky="e")
 
-        self.btnGuardarAlumno = ttk.Button(pestanaAlumnos, text="Guardar")
+        self.btnGuardarAlumno = ttk.Button(pestanaAlumnos, text="Guardar", command=self.guardarAlumno)
         self.btnGuardarAlumno.grid(row=8, column=1, padx=10, pady=10, sticky="w")
 
-        self.btnCancelarAlumno = ttk.Button(pestanaAlumnos, text="Cancelar")
+        self.btnCancelarAlumno = ttk.Button(pestanaAlumnos, text="Cancelar", command=self.limpiarCamposAlumno)
         self.btnCancelarAlumno.grid(row=8, column=2, padx=10, pady=10, sticky="w")
 
-        self.btnEditarAlumno = ttk.Button(pestanaAlumnos, text="Editar")
+        self.btnEditarAlumno = ttk.Button(pestanaAlumnos, text="Editar", command=self.editarAlumno)
         self.btnEditarAlumno.grid(row=8, column=3, padx=10, pady=10, sticky="w")
 
-        self.btnEliminarAlumno = ttk.Button(pestanaAlumnos, text="Eliminar")
+        self.btnEliminarAlumno = ttk.Button(pestanaAlumnos, text="Eliminar", command=self.eliminarAlumno)
         self.btnEliminarAlumno.grid(row=8, column=4, padx=10, pady=10, sticky="w")
 
         self.notebook.add(pestanaAlumnos, text="Alumnos")
@@ -702,7 +986,7 @@ class Application(ttk.Frame):
         self.txIdMaestroBuscar = ttk.Entry(pestanaMaestros, width=30)
         self.txIdMaestroBuscar.grid(row=0, column=1, padx=5, pady=5)
 
-        self.btnBuscarMaestro = ttk.Button(pestanaMaestros, text="Buscar")
+        self.btnBuscarMaestro = ttk.Button(pestanaMaestros, text="Buscar", command=self.buscarMaestro)
         self.btnBuscarMaestro.grid(row=0, column=2, padx=5, pady=5)
 
         ttk.Label(pestanaMaestros, text="Nombre:").grid(row=1, column=0, sticky="e")
@@ -721,6 +1005,8 @@ class Application(ttk.Frame):
         self.carreraComboMaestro = ttk.Combobox(pestanaMaestros, values=["Seleccione", "Ingeniería", "Licenciatura"], width=28)
         self.carreraComboMaestro.grid(row=2, column=3, pady=5)
         self.carreraComboMaestro.set("Seleccione")
+        self.cargarCarreraProfe()
+        self.carreraComboMaestro.bind("<<ComboboxSelected>>", self.actualizarCarreraProfe)
 
         ttk.Label(pestanaMaestros, text="A Materno:").grid(row=3, column=0, sticky="e")
         self.txAMaternoMaestro = ttk.Entry(pestanaMaestros, width=30)
@@ -732,31 +1018,33 @@ class Application(ttk.Frame):
             "Inteligencia Artificial 1", "Ingeniería de Software 1"], width=28)
         self.materiaComboMaestro.grid(row=3, column=3, pady=5)
         self.materiaComboMaestro.set("Seleccione")
+        self.cargarMateriasMaestro()
+        self.materiaComboMaestro.bind("<<ComboboxSelected>>", self.actualizarMateriasMaestro)
 
         ttk.Label(pestanaMaestros, text="Email:").grid(row=4, column=0, sticky="e")
         self.txEmailMaestro = ttk.Entry(pestanaMaestros, width=30)
         self.txEmailMaestro.grid(row=4, column=1, pady=5)
 
-        self.btnAgregarMateriaMaestro = ttk.Button(pestanaMaestros, text="Agregar")
+        self.btnAgregarMateriaMaestro = ttk.Button(pestanaMaestros, text="Agregar", command=self.agregarMateriaMaestro)
         self.btnAgregarMateriaMaestro.grid(row=5, column=3, padx=5, pady=5)
 
         self.treeMateriaMaestro = ttk.Treeview(pestanaMaestros, columns=("Nombre"), show="headings", height=6)
         self.treeMateriaMaestro.heading("Nombre", text="Nombre")
         self.treeMateriaMaestro.grid(row=6, column=3, pady=5)
 
-        self.btnNuevoMaestro = ttk.Button(pestanaMaestros, text="Nuevo")
+        self.btnNuevoMaestro = ttk.Button(pestanaMaestros, text="Nuevo", command=self.limpiarCamposMaestro)
         self.btnNuevoMaestro.grid(row=8, column=0, padx=10, pady=10, sticky="e")
 
-        self.btnGuardarMaestro = ttk.Button(pestanaMaestros, text="Guardar")
+        self.btnGuardarMaestro = ttk.Button(pestanaMaestros, text="Guardar", command=self.guardarMaestro)
         self.btnGuardarMaestro.grid(row=8, column=1, padx=10, pady=10, sticky="w")
 
-        self.btnCancelarMaestro = ttk.Button(pestanaMaestros, text="Cancelar")
+        self.btnCancelarMaestro = ttk.Button(pestanaMaestros, text="Cancelar", command=self.limpiarCamposMaestro)
         self.btnCancelarMaestro.grid(row=8, column=2, padx=10, pady=10, sticky="w")
 
-        self.btnEditarMaestro = ttk.Button(pestanaMaestros, text="Editar")
+        self.btnEditarMaestro = ttk.Button(pestanaMaestros, text="Editar", command=self.editarMaestro)
         self.btnEditarMaestro.grid(row=8, column=3, padx=10, pady=10, sticky="w")
 
-        self.btnEliminarMaestro = ttk.Button(pestanaMaestros, text="Eliminar")
+        self.btnEliminarMaestro = ttk.Button(pestanaMaestros, text="Eliminar", command=self.eliminarMaestro)
         self.btnEliminarMaestro.grid(row=8, column=4, padx=10, pady=10, sticky="w")
 
         self.notebook.add(pestanaMaestros, text="Maestros")
@@ -771,7 +1059,7 @@ class Application(ttk.Frame):
         self.txIDMateriaBuscar = ttk.Entry(pestanaMaterias, width=30)
         self.txIDMateriaBuscar.grid(row=0, column=1, padx=10, pady=10)
 
-        self.btnBuscarMateria = ttk.Button(pestanaMaterias, text="Buscar")
+        self.btnBuscarMateria = ttk.Button(pestanaMaterias, text="Buscar", command=self.buscarMateria)
         self.btnBuscarMateria.grid(row=0, column=2, padx=10, pady=10)
 
         ttk.Label(pestanaMaterias, text="Asignatura:").grid(row=1, column=0, padx=10, pady=5, sticky="e")
@@ -786,24 +1074,26 @@ class Application(ttk.Frame):
         self.carreraComboMateria = ttk.Combobox(pestanaMaterias, values=["Seleccione", "Ingeniería", "Licenciatura"], width=30)
         self.carreraComboMateria.grid(row=2, column=3, padx=10, pady=5)
         self.carreraComboMateria.set("Seleccione")
+        self.cargarCarreraMateria()
+        self.carreraComboMateria.bind("<<ComboboxSelected>>", self.actualizarCarreraMateria)
 
         ttk.Label(pestanaMaterias, text="Semestre:").grid(row=3, column=0, padx=10, pady=5, sticky="e")
         self.txSemestreMateria = ttk.Entry(pestanaMaterias, width=30)
         self.txSemestreMateria.grid(row=3, column=1, padx=10, pady=5)
 
-        self.btnNuevoMateria = ttk.Button(pestanaMaterias, text="Nuevo")
+        self.btnNuevoMateria = ttk.Button(pestanaMaterias, text="Nuevo", command=self.limpiarCamposMateria)
         self.btnNuevoMateria.grid(row=5, column=0, padx=10, pady=10, sticky="e")
 
-        self.btnGuardarMateria = ttk.Button(pestanaMaterias, text="Guardar")
+        self.btnGuardarMateria = ttk.Button(pestanaMaterias, text="Guardar", command=self.guardarMateria)
         self.btnGuardarMateria.grid(row=5, column=1, padx=10, pady=10, sticky="w")
 
-        self.btnCancelarMateria = ttk.Button(pestanaMaterias, text="Cancelar")
+        self.btnCancelarMateria = ttk.Button(pestanaMaterias, text="Cancelar", command=self.limpiarCamposMateria)
         self.btnCancelarMateria.grid(row=5, column=2, padx=10, pady=10, sticky="w")
 
-        self.btnEditarMateria = ttk.Button(pestanaMaterias, text="Editar")
+        self.btnEditarMateria = ttk.Button(pestanaMaterias, text="Editar", command=self.editarMateria)
         self.btnEditarMateria.grid(row=5, column=3, padx=10, pady=10, sticky="w")
 
-        self.btnEliminarMateria = ttk.Button(pestanaMaterias, text="Eliminar")
+        self.btnEliminarMateria = ttk.Button(pestanaMaterias, text="Eliminar", command=self.eliminarMateria)
         self.btnEliminarMateria.grid(row=5, column=4, padx=10, pady=10, sticky="w")
 
         self.notebook.add(pestanaMaterias, text="Materias")
@@ -818,7 +1108,7 @@ class Application(ttk.Frame):
         self.txIdGrupoBuscar = ttk.Entry(pestanaGrupos, width=30)
         self.txIdGrupoBuscar.grid(row=0, column=1, padx=5, pady=5)
 
-        self.btnBuscarGrupo = ttk.Button(pestanaGrupos, text="Buscar")
+        self.btnBuscarGrupo = ttk.Button(pestanaGrupos, text="Buscar", command=self.buscarGrupo)
         self.btnBuscarGrupo.grid(row=0, column=2, padx=5, pady=5)
 
         ttk.Label(pestanaGrupos, text="Nombre Grupo:").grid(row=1, column=0, sticky="e")
@@ -833,11 +1123,15 @@ class Application(ttk.Frame):
         self.salonComboGrupo = ttk.Combobox(pestanaGrupos, values=["Seleccione","Salones"], width=28)
         self.salonComboGrupo.grid(row=2, column=1, pady=5)
         self.salonComboGrupo.set("Seleccione")
+        self.cargarSalones()
+        self.salonComboGrupo.bind("<<ComboboxSelected>>", self.actualizarSalonesGrupo)
 
         ttk.Label(pestanaGrupos, text="Horario:").grid(row=2, column=2, sticky="e")
         self.horarioComboGrupo = ttk.Combobox(pestanaGrupos, values=["Seleccione", "Horario"], width=28)
         self.horarioComboGrupo.grid(row=2, column=3, pady=5)
         self.horarioComboGrupo.set("Seleccione")
+        self.cargarHorario()
+        self.horarioComboGrupo.bind("<<ComboboxSelected>>", self.actualizarHorarioGrupo)
 
         ttk.Label(pestanaGrupos, text="Semestre:").grid(row=3, column=0, sticky="e")
         self.txSemestreGrupo = ttk.Entry(pestanaGrupos, width=30)
@@ -847,11 +1141,15 @@ class Application(ttk.Frame):
         self.carreraComboGrupo = ttk.Combobox(pestanaGrupos, values=["Seleccione", "Ingeniería", "Licenciatura"], width=28)
         self.carreraComboGrupo.grid(row=3, column=3, pady=5)
         self.carreraComboGrupo.set("Seleccione")
+        self.cargarCarreraGrupo()
+        self.carreraComboGrupo.bind("<<ComboboxSelected>>", self.actualizarCarreraGrupo)
 
         ttk.Label(pestanaGrupos, text="Maestros:").grid(row=4, column=0, sticky="e")
-        self.maestrosComboGrupo = ttk.Combobox(pestanaGrupos, values=["Maestros"], width=28)
+        self.maestrosComboGrupo = ttk.Combobox(pestanaGrupos, values=["Seleccione"], width=28)
         self.maestrosComboGrupo.grid(row=4, column=1, pady=5)
         self.maestrosComboGrupo.set("Seleccione")
+        self.cargarMaestros()
+        self.maestrosComboGrupo.bind("<<ComboboxSelected>>", self.actualizarMaestroGrupo)
 
         ttk.Label(pestanaGrupos, text="Materia:").grid(row=4, column=2, sticky="e")
         self.materiaComboGrupo = ttk.Combobox(pestanaGrupos, values=[
@@ -859,26 +1157,35 @@ class Application(ttk.Frame):
             "Inteligencia Artificial 1", "Ingeniería de Software 1"], width=28)
         self.materiaComboGrupo.grid(row=4, column=3, pady=5)
         self.materiaComboGrupo.set("Seleccione")
+        self.cargarMateriasGrupo()
+        self.materiaComboGrupo.bind("<<ComboboxSelected>>", self.actualizarHorarioGrupo)
 
         ttk.Label(pestanaGrupos, text="Alumnos Max.:").grid(row=5, column=0, sticky="e")
         self.maxAlumsComboGrupo = ttk.Combobox(pestanaGrupos, values=["Seleccione", "1", "2", "3"], width=28)
         self.maxAlumsComboGrupo.grid(row=5, column=1, pady=5)
         self.maxAlumsComboGrupo.set("Seleccione")
 
-        self.btnNuevoCompra = ttk.Button(pestanaGrupos, text="Nuevo")
-        self.btnNuevoCompra.grid(row=7, column=0, padx=10, pady=10, sticky="e")
+        self.btnAgregarMateriaGrupo = ttk.Button(pestanaGrupos, text="Agregar", command=self.agregarMateriaGrupo)
+        self.btnAgregarMateriaGrupo.grid(row= 5, column= 3, pady=5)
 
-        self.btnGuardarCompra = ttk.Button(pestanaGrupos, text="Guardar")
-        self.btnGuardarCompra.grid(row=7, column=1, padx=10, pady=10, sticky="w")
+        self.treeMateriaGrupo = ttk.Treeview(pestanaGrupos, columns=("Nombre"), show="headings", height=6)
+        self.treeMateriaGrupo.heading("Nombre", text="Nombre")
+        self.treeMateriaGrupo.grid(row=6, column=3, pady=5)
 
-        self.btnCancelarCompra = ttk.Button(pestanaGrupos, text="Cancelar")
-        self.btnCancelarCompra.grid(row=7, column=2, padx=10, pady=10, sticky="w")
+        self.btnNuevoGrupo = ttk.Button(pestanaGrupos, text="Nuevo", command=self.limpiarCamposGrupo)
+        self.btnNuevoGrupo.grid(row=8, column=0, padx=10, pady=10, sticky="e")
 
-        self.btnEditarCompra = ttk.Button(pestanaGrupos, text="Editar")
-        self.btnEditarCompra.grid(row=7, column=3, padx=10, pady=10, sticky="w")
+        self.btnGuardarGrupo = ttk.Button(pestanaGrupos, text="Guardar", command=self.guardarGrupo)
+        self.btnGuardarGrupo.grid(row=8, column=1, padx=10, pady=10, sticky="w")
 
-        self.btnEliminarCompra = ttk.Button(pestanaGrupos, text="Eliminar")
-        self.btnEliminarCompra.grid(row=7, column=4, padx=10, pady=10, sticky="w")
+        self.btnCancelarGrupo = ttk.Button(pestanaGrupos, text="Cancelar", command=self.limpiarCamposGrupo)
+        self.btnCancelarGrupo.grid(row=8, column=2, padx=10, pady=10, sticky="w")
+
+        self.btnEditarGrupo = ttk.Button(pestanaGrupos, text="Editar", command=self.editarGrupo)
+        self.btnEditarGrupo.grid(row=8, column=3, padx=10, pady=10, sticky="w")
+
+        self.btnEliminarGrupo = ttk.Button(pestanaGrupos, text="Eliminar", command=self.eliminarGrupo)
+        self.btnEliminarGrupo.grid(row=8, column=4, padx=10, pady=10, sticky="w")
                 
         self.notebook.add(pestanaGrupos, text="Grupos")
 
@@ -920,6 +1227,91 @@ class Application(ttk.Frame):
         self.btnEliminarHorario.grid(row=6, column=4, padx=10, pady=10, sticky="w")
                 
         self.notebook.add(pestanaHorario, text="Horario")
+
+        self.notebook.pack(expand=True, fill='both', padx=10, pady=10)
+        self.pack()
+
+        #?-----------------------SALONES-----------------------#
+
+        pestanaSalon = ttk.Frame(self.notebook)
+        pestanaSalon.grid_columnconfigure(0, weight=1)
+        pestanaSalon.grid_columnconfigure(1, weight=1)
+
+        ttk.Label(pestanaSalon, text="Ingrese ID salon:").grid(row=0, column=0, padx=10, pady=10, sticky="e")
+        self.txIdBuscarSalon = ttk.Entry(pestanaSalon, width=30)
+        self.txIdBuscarSalon.grid(row=0, column=1, padx=10, pady=10)
+
+        self.btnBuscarSalon = ttk.Button(pestanaSalon, text="Buscar", command=self.buscarSalon)
+        self.btnBuscarSalon.grid(row=0, column=2, padx=10, pady=10)
+
+        ttk.Label(pestanaSalon, text="Edificio:").grid(row=1, column=0, padx=10, pady=5, sticky="e")
+        self.comboEdificioSalon = ttk.Combobox(pestanaSalon, values=["Seleccione", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L",
+                                                                    "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"], width=28)
+        self.comboEdificioSalon.set("Seleccione")
+        self.comboEdificioSalon.grid(row=1, column=1, padx=10, pady=5)
+
+        ttk.Label(pestanaSalon, text="Aula:").grid(row=2, column=0, padx=10, pady=5, sticky="e")
+        self.txAula = ttk.Entry(pestanaSalon, width=30)
+        self.txAula.grid(row=2, column=1, padx=10, pady=5)
+
+        self.btnNuevoSalon = ttk.Button(pestanaSalon, text="Nuevo", command=self.limpiarCamposSalon)
+        self.btnNuevoSalon.grid(row=6, column=0, padx=10, pady=10, sticky="e")
+
+        self.btnGuardarSalon = ttk.Button(pestanaSalon, text="Guardar", command=self.guardarSalon)
+        self.btnGuardarSalon.grid(row=6, column=1, padx=10, pady=10, sticky="w")
+
+        self.btnCancelarSalon = ttk.Button(pestanaSalon, text="Cancelar", command=self.limpiarCamposSalon)
+        self.btnCancelarSalon.grid(row=6, column=2, padx=10, pady=10, sticky="w")
+
+        self.btnEditarSalon = ttk.Button(pestanaSalon, text="Editar", command=self.editarSalon)
+        self.btnEditarSalon.grid(row=6, column=3, padx=10, pady=10, sticky="w")
+
+        self.btnEliminarSalon = ttk.Button(pestanaSalon, text="Eliminar", command=self.eliminarSalon)
+        self.btnEliminarSalon.grid(row=6, column=4, padx=10, pady=10, sticky="w")
+                
+        self.notebook.add(pestanaSalon, text="Salon")
+
+        self.notebook.pack(expand=True, fill='both', padx=10, pady=10)
+        self.pack()
+
+        #?-----------------------CARRERAS-----------------------#
+
+        pestanaCarrera = ttk.Frame(self.notebook)
+        pestanaCarrera.grid_columnconfigure(0, weight=1)
+        pestanaCarrera.grid_columnconfigure(1, weight=1)
+
+        ttk.Label(pestanaCarrera, text="Ingrese ID carrera:").grid(row=0, column=0, padx=10, pady=10, sticky="e")
+        self.txIdBuscarCarrera = ttk.Entry(pestanaCarrera, width=30)
+        self.txIdBuscarCarrera.grid(row=0, column=1, padx=10, pady=10)
+
+        self.btnBuscarCarrera = ttk.Button(pestanaCarrera, text="Buscar", command=self.buscarCarrera)
+        self.btnBuscarCarrera.grid(row=0, column=2, padx=10, pady=10)
+
+        ttk.Label(pestanaCarrera, text="Nombre:").grid(row=1, column=0, padx=10, pady=5, sticky="e")
+        self.txNombreCarrera = ttk.Entry(pestanaCarrera, width=30)
+        self.txNombreCarrera.grid(row=1, column=1, padx=10, pady=5)
+
+        ttk.Label(pestanaCarrera, text="Num. Semestres:").grid(row=2, column=0, padx=10, pady=5, sticky="e")
+        self.comboNumSemestres = ttk.Combobox(pestanaCarrera, values=["Seleccione", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"], width=28)
+        self.comboNumSemestres.set("Seleccione")
+        self.comboNumSemestres.grid(row=2, column=1, padx=10, pady=5)
+
+        self.btnNuevaCarrera = ttk.Button(pestanaCarrera, text="Nuevo", command=self.limpiarCamposCarrera)
+        self.btnNuevaCarrera.grid(row=6, column=0, padx=10, pady=10, sticky="e")
+
+        self.btnGuardarCarrera = ttk.Button(pestanaCarrera, text="Guardar", command=self.guardarCarrera)
+        self.btnGuardarCarrera.grid(row=6, column=1, padx=10, pady=10, sticky="w")
+
+        self.btnCancelarCarrera = ttk.Button(pestanaCarrera, text="Cancelar", command=self.limpiarCamposCarrera)
+        self.btnCancelarCarrera.grid(row=6, column=2, padx=10, pady=10, sticky="w")
+
+        self.btnEditarCarrera = ttk.Button(pestanaCarrera, text="Editar", command=self.editarCarrera)
+        self.btnEditarCarrera.grid(row=6, column=3, padx=10, pady=10, sticky="w")
+
+        self.btnEliminarCarrera = ttk.Button(pestanaCarrera, text="Eliminar", command=self.eliminarCarrera)
+        self.btnEliminarCarrera.grid(row=6, column=4, padx=10, pady=10, sticky="w")
+                
+        self.notebook.add(pestanaCarrera, text="Carrera")
 
         self.notebook.pack(expand=True, fill='both', padx=10, pady=10)
         self.pack()
@@ -1003,9 +1395,15 @@ class Application(ttk.Frame):
         self.carreraComboAlumno.set("Seleccione")
         self.materiaComboAlumno.set("Seleccione")
         self.txPasswordAlumno.delete(0, 'end')
+        self.treeMateriaAlumno.delete(*self.treeMateriaAlumno.get_children())
     
     def guardarAlumno(self):
         if self.validarCamposAlumno():
+            materias = [self.treeMateriaAlumno.item(item, 'values')[0] for item in self.treeMateriaAlumno.get_children()]
+            if not materias:
+                messagebox.showerror("Error", "Debe agregar al menos una materia.")
+                return
+            materias_str = ', '.join(materias)
             alumno = {
                 'nombre': self.txNombreAlumno.get(),
                 'apaterno': self.txAPaternoAlumno.get(),
@@ -1014,11 +1412,13 @@ class Application(ttk.Frame):
                 'estado': self.estadoComboAlumno.get(),
                 'fecha_nac': self.txFechaAlumno.get(),
                 'carrera': self.carreraComboAlumno.get(),
-                'materia': self.materiaComboAlumno.get(),
+                'materia': materias_str,
                 'password': self.txPasswordAlumno.get()
             }
+
             self.alumnos.save(alumno)
-    
+            messagebox.showinfo("Éxito", "Alumno guardado correctamente")
+
     def buscarAlumno(self):
         alumnos_id = self.txIdAlumnoBuscar.get()
         if alumnos_id:
@@ -1032,13 +1432,20 @@ class Application(ttk.Frame):
                 self.estadoComboAlumno.set(alumno[5])
                 self.txFechaAlumno.insert(0, alumno[6])
                 self.carreraComboAlumno.set(alumno[7])
-                self.materiaComboAlumno.set(alumno[8])
+                materias = alumno[8].split(', ') if alumno[8] else []
+                for materia in materias:
+                    self.treeMateriaAlumno.insert('', 'end', values=(materia,))
                 self.txPasswordAlumno.insert(0, alumno[9])
             else:
                 messagebox.showerror("Error", "Alumno no encontrado")
-    
+
     def editarAlumno(self):
         if self.validarCamposAlumno():
+            materias = [self.treeMateriaAlumno.item(item, 'values')[0] for item in self.treeMateriaAlumno.get_children()]
+            if not materias:
+                messagebox.showerror("Error", "Debe agregar al menos una materia.")
+                return
+            materias_str = ', '.join(materias)
             alumno = {
                 'alumnos_id': self.txIdAlumnoBuscar.get(),
                 'nombre': self.txNombreAlumno.get(),
@@ -1048,19 +1455,31 @@ class Application(ttk.Frame):
                 'estado': self.estadoComboAlumno.get(),
                 'fecha_nac': self.txFechaAlumno.get(),
                 'carrera': self.carreraComboAlumno.get(),
-                'materia': self.materiaComboAlumno.get(),
+                'materia': materias_str,
                 'password': self.txPasswordAlumno.get()
             }
             self.alumnos.edit(alumno)
+            messagebox.showinfo("Éxito", "Alumno editado correctamente")
     
     def eliminarAlumno(self):
         alumnos_id = self.txIdAlumnoBuscar.get()
         if alumnos_id:
             self.alumnos.remove(alumnos_id)
             self.limpiarCamposAlumno()
-        
+    
+    def agregarMateriaAlumno(self):
+        materia = self.materiaComboAlumno.get()
+        if materia == "Seleccione":
+            messagebox.showerror("Error", "Seleccione una materia válida.")
+            return
+        for item in self.treeMateriaAlumno.get_children():
+            if self.treeMateriaAlumno.item(item, 'values')[0] == materia:
+                messagebox.showerror("Error", "La materia ya está en la lista.")
+                return
+        self.treeMateriaAlumno.insert('', 'end', values=(materia,))
+     
     def validarCamposAlumno(self):
-        if self.estadoComboAlumno.get() == "Seleccione" or self.carreraComboAlumno.get() == "Seleccione" or self.materiaComboAlumno.get() or not self.txNombreAlumno.get() or not self.txAPaternoAlumno.get() or not self.txAMaternoAlumno.get() or not self.txEmailAlumno.get() or not self.txFechaAlumno.get() or not self.txPasswordAlumno.get():
+        if self.estadoComboAlumno.get() == "Seleccione" or self.carreraComboAlumno.get() == "Seleccione" or not self.txNombreAlumno.get() or not self.txAPaternoAlumno.get() or not self.txAMaternoAlumno.get() or not self.txEmailAlumno.get() or not self.txFechaAlumno.get() or not self.txPasswordAlumno.get():
             messagebox.showerror("Error", "Faltan Campos por llenar")
             return False
         return True
@@ -1075,19 +1494,26 @@ class Application(ttk.Frame):
         self.carreraComboMaestro.set("Seleccione")
         self.materiaComboMaestro.set("Seleccione")
         self.txGradoEstudiosMaestro.delete(0, 'end')
+        self.treeMateriaMaestro.delete(*self.treeMateriaMaestro.get_children())
     
     def guardarMaestro(self):
         if self.validarCamposMaestro():
+            materias = [self.treeMateriaMaestro.item(item, 'values')[0] for item in self.treeMateriaMaestro.get_children()]
+            if not materias:
+                messagebox.showerror("Error", "Debe agregar al menos una materia.")
+                return
+            materias_str = ', '.join(materias)
             maestro = {
                 'nombre': self.txNombreMaestro.get(),
                 'apaterno': self.txAPaternoMaestro.get(),
                 'amaterno': self.txAMaternoMaestro.get(),
                 'email': self.txEmailMaestro.get(),
-                'carrera': self.carreraComboMaestro.get(),
-                'materia': self.materiaComboMaestro.get(),
-                'grado_estudios': self.txGradoEstudiosMaestro.get()
+                'grado_estudios': self.txGradoEstudiosMaestro.get(),
+                'carrera': self.carreraComboAlumno.get(),
+                'materia': materias_str,
             }
             self.maestros.save(maestro)
+            messagebox.showinfo("Éxito", "Maestro guardado correctamente")
     
     def buscarMaestro(self):
         maestro_id = self.txIdMaestroBuscar.get()
@@ -1100,33 +1526,67 @@ class Application(ttk.Frame):
                 self.txAMaternoMaestro.insert(0, maestro[3])
                 self.txEmailMaestro.insert(0, maestro[4])
                 self.carreraComboMaestro.set(maestro[5])
-                self.materiaComboMaestro.set(0, maestro[6])
+                materias = maestro[6].split(', ') if maestro[6] else []
+                for materia in materias:
+                    self.treeMateriaMaestro.insert('', 'end', values=(materia,))
                 self.txGradoEstudiosMaestro.insert(0, maestro[7])
             else:
                 messagebox.showerror("Error", "Maestro no encontrado")
     
     def editarMaestro(self):
         if self.validarCamposMaestro():
+            materias = [self.treeMateriaMaestro.item(item, 'values')[0] for item in self.treeMateriaMaestro.get_children()]
+            if not materias:
+                messagebox.showerror("Error", "Debe agregar al menos una materia.")
+                return
+            materias_str = ', '.join(materias)
             maestro = {
-                'maestro_id': self.txIdUsuarioBuscar.get(),
+                'maestro_id': self.txIdMaestroBuscar.get(),
                 'nombre': self.txNombreMaestro.get(),
                 'apaterno': self.txAPaternoMaestro.get(),
                 'amaterno': self.txAMaternoMaestro.get(),
                 'email': self.txEmailMaestro.get(),
-                'carrera': self.carreraComboMaestro.get(),
-                'materia': self.materiaComboMaestro.get(),
-                'grado_estudios': self.txGradoEstudiosMaestro.get()
+                'grado_estudios': self.txGradoEstudiosMaestro.get(),
+                'carrera': self.carreraComboAlumno.get(),
+                'materia': materias_str,
             }
             self.maestros.edit(maestro)
+            messagebox.showinfo("Éxito", "Maestro editado correctamente")
     
     def eliminarMaestro(self):
         maestro_id = self.txIdMaestroBuscar.get()
         if maestro_id:
             self.maestros.remove(maestro_id)
             self.limpiarCamposMaestro()
+    
+    def cargarMaestros(self):
+        db = dbEscolar()
+        conn = db.con.open()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT maestro_id, nombre FROM maestros")
+            maestros = cursor.fetchall()
+            self.listaMaestros = {nombre: maestro_id for maestro_id, nombre in maestros}
+            self.maestrosComboGrupo['values'] = list(self.listaMaestros.keys())
+            db.con.close()
+    
+    def actualizarMaestroGrupo(self, event):
+        nombreMaestro = self.maestrosComboGrupo.get()
+        maestroID = self.listaMaestros.get(nombreMaestro, "")
+    
+    def agregarMateriaMaestro(self):
+        materia = self.materiaComboMaestro.get()
+        if materia == "Seleccione":
+            messagebox.showerror("Error", "Seleccione una materia válida.")
+            return
+        for item in self.treeMateriaMaestro.get_children():
+            if self.treeMateriaMaestro.item(item, 'values')[0] == materia:
+                messagebox.showerror("Error", "La materia ya está en la lista.")
+                return
+        self.treeMateriaMaestro.insert('', 'end', values=(materia,))
         
     def validarCamposMaestro(self):
-        if self.carreraComboMaestro.get() == "Seleccione" or self.materiaComboMaestro.get() == "Seleccione" or not self.txNombreMaestro.get() or not self.txAPaternoMaestro.get() or not self.txAMaternoMaestro.get() or not self.txEmailMaestro.get() or not self.txGradoEstudiosMaestro.get():
+        if self.carreraComboMaestro.get() == "Seleccione" or not self.txNombreMaestro.get() or not self.txAPaternoMaestro.get() or not self.txAMaternoMaestro.get() or not self.txEmailMaestro.get() or not self.txGradoEstudiosMaestro.get():
             messagebox.showerror("Error", "Faltan Campos por llenar")
             return False
         return True
@@ -1163,7 +1623,7 @@ class Application(ttk.Frame):
                 self.txSemestreMateria.insert(0, materia[3])
                 self.carreraComboMateria.set(materia[4])
             else:
-                messagebox.showerror("Error", "Usuario no encontrado")
+                messagebox.showerror("Error", "Materia no encontrada")
     
     def editarMateria(self):
         if self.validarCamposMateria():
@@ -1181,9 +1641,152 @@ class Application(ttk.Frame):
         if materias_id:
             self.materias.remove(materias_id)
             self.limpiarCamposMateria()
+    
+    def cargarMateriasAlumno(self):
+        db = dbEscolar()
+        conn = db.con.open()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT materias_id, asignatura FROM materias")
+            materias = cursor.fetchall()
+            self.listaMateriasAlumno = {asignatura: materias_id for materias_id, asignatura in materias}
+            self.materiaComboAlumno['values'] = list(self.listaMateriasAlumno.keys())
+            db.con.close()
+    
+    def cargarMateriasGrupo(self):
+        db = dbEscolar()
+        conn = db.con.open()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT materias_id, asignatura FROM materias")
+            materias = cursor.fetchall()
+            self.listaMateriasGrupo = {asignatura: materias_id for materias_id, asignatura in materias}
+            self.materiaComboGrupo['values'] = list(self.listaMateriasGrupo.keys())
+            db.con.close()
+    
+    def cargarMateriasMaestro(self):
+        db = dbEscolar()
+        conn = db.con.open()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT materias_id, asignatura FROM materias")
+            materias = cursor.fetchall()
+            self.listaMateriasMaestro = {asignatura: materias_id for materias_id, asignatura in materias}
+            self.materiaComboMaestro['values'] = list(self.listaMateriasMaestro.keys())
+            db.con.close()
+    
+    def actualizarMateriasGrupo(self, event):
+        asignatura = self.materiaComboGrupo.get()
+        materiasID = self.listaMaestros.get(asignatura, "")
+    
+    def actualizarMateriasAlumno(self, event):
+        asignatura = self.materiaComboAlumno.get()
+        materiasID = self.listaMaestros.get(asignatura, "")
+
+    def actualizarMateriasMaestro(self, event):
+        asignatura = self.materiaComboMaestro.get()
+        materiasID = self.listaMaestros.get(asignatura, "")
         
     def validarCamposMateria(self):
         if self.carreraComboMateria.get() == "Seleccione" or not self.txAsignaturaMateria.get() or not self.txCreditosMateria.get() or not self.txSemestreMateria.get():
+            messagebox.showerror("Error", "Faltan Campos por llenar")
+            return False
+        return True
+    
+    #FUNC:-----------------------GRUPOS-----------------------#
+
+    def limpiarCamposGrupo(self):
+        self.txNombreGrupo.delete(0, 'end')
+        self.txFechaGrupo.delete(0, 'end')
+        self.salonComboGrupo.set("Seleccione")
+        self.horarioComboGrupo.set("Seleccione")
+        self.txSemestreGrupo.delete(0, 'end')
+        self.carreraComboGrupo.set("Seleccione")
+        self.maestrosComboGrupo.set("Seleccione")
+        self.materiaComboGrupo.set("Seleccione")
+        self.maxAlumsComboGrupo.set("Seleccione")
+        self.treeMateriaGrupo.delete(*self.treeMateriaGrupo.get_children())
+    
+    def guardarGrupo(self):
+        if self.validarCamposGrupo():
+            materias = [self.treeMateriaGrupo.item(item, 'values')[0] for item in self.treeMateriaGrupo.get_children()]
+            if not materias:
+                messagebox.showerror("Error", "Debe agregar al menos una materia.")
+                return
+            materias_str = ', '.join(materias)
+            grupo = {
+                'nombre': self.txNombreGrupo.get(),
+                'fecha': self.txFechaGrupo.get(),
+                'carrera': self.carreraComboGrupo.get(),
+                'materia': materias_str,
+                'maestro': self.maestrosComboGrupo.get(),
+                'salon': self.salonComboGrupo.get(),
+                'horario': self.horarioComboGrupo.get(),
+                'semestre': self.txSemestreGrupo.get(),
+                'max_alumnos': self.maxAlumsComboGrupo.get()
+            }
+            self.grupos.save(grupo)
+    
+    def buscarGrupo(self):
+        grupo_id = self.txIdGrupoBuscar.get()
+        if grupo_id:
+            grupo = self.grupos.search(grupo_id)
+            if grupo:
+                self.limpiarCamposGrupo()
+                self.txNombreGrupo.insert(0, grupo[1])
+                self.txFechaGrupo.insert(0, grupo[2])
+                self.carreraComboGrupo.set(grupo[3])
+                materias = grupo[4].split(', ') if grupo[4] else []
+                for materia in materias:
+                    self.treeMateriaGrupo.insert('', 'end', values=(materia,))
+                self.maestrosComboGrupo.set(grupo[5])
+                self.salonComboGrupo.set(grupo[6])
+                self.horarioComboGrupo.set(grupo[7])
+                self.txSemestreGrupo.insert(0, grupo[8])
+                self.maxAlumsComboGrupo.set(grupo[9])
+            else:
+                messagebox.showerror("Error", "Grupo no encontrado")
+    
+    def editarGrupo(self):
+        if self.validarCamposGrupo():
+            materias = [self.treeMateriaGrupo.item(item, 'values')[0] for item in self.treeMateriaGrupo.get_children()]
+            if not materias:
+                messagebox.showerror("Error", "Debe agregar al menos una materia.")
+                return
+            materias_str = ', '.join(materias)
+            grupo = {
+                'grupo_id': self.txIdGrupoBuscar.get(),
+                'nombre': self.txNombreGrupo.get(),
+                'fecha': self.txFechaGrupo.get(),
+                'carrera': self.carreraComboGrupo.get(),
+                'materia': materias_str,
+                'maestro': self.maestrosComboGrupo.get(),
+                'salon': self.salonComboGrupo.get(),
+                'horario': self.horarioComboGrupo.get(),
+                'semestre': self.txSemestreGrupo.get(),
+                'max_alumnos': self.maxAlumsComboGrupo.get()
+            }
+            self.grupos.edit(grupo)
+    
+    def eliminarGrupo(self):
+        grupo_id = self.txIdGrupoBuscar.get()
+        if grupo_id:
+            self.grupos.remove(grupo_id)
+            self.limpiarCamposGrupo()
+
+    def agregarMateriaGrupo(self):
+        materia = self.materiaComboGrupo.get()
+        if materia == "Seleccione":
+            messagebox.showerror("Error", "Seleccione una materia válida.")
+            return
+        for item in self.treeMateriaGrupo.get_children():
+            if self.treeMateriaGrupo.item(item, 'values')[0] == materia:
+                messagebox.showerror("Error", "La materia ya está en la lista.")
+                return
+        self.treeMateriaGrupo.insert('', 'end', values=(materia,))
+        
+    def validarCamposGrupo(self):
+        if self.salonComboGrupo.get() == "Seleccione" or self.horarioComboGrupo.get() == "Seleccione" or self.carreraComboGrupo.get() == "Seleccione" or self.maestrosComboGrupo.get() == "Seleccione" or self.maxAlumsComboGrupo.get() == "Seleccione" or not self.txNombreGrupo.get() or not self.txFechaGrupo.get() or not self.txSemestreGrupo.get():
             messagebox.showerror("Error", "Faltan Campos por llenar")
             return False
         return True
@@ -1226,12 +1829,192 @@ class Application(ttk.Frame):
         if horario_id:
             self.horarios.remove(horario_id)
             self.limpiarCamposHorario()
+    
+    def cargarHorario(self):
+        db = dbEscolar()
+        conn = db.con.open()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT horario_id, hora FROM horarios")
+            horarios = cursor.fetchall()
+            self.listaHorarios = {hora: horario_id for horario_id, hora in horarios}
+            self.horarioComboGrupo['values'] = list(self.listaHorarios.keys())
+            db.con.close()
+    
+    def actualizarHorarioGrupo(self, event):
+        horaHorario = self.horarioComboGrupo.get()
+        maestroID = self.listaHorarios.get(horaHorario, "")
         
     def validarCamposHorario(self):
         if self.comboTurnoHorario.get() == "Seleccione" or not self.txHoraHorario.get():
             messagebox.showerror("Error", "Faltan Campos por llenar")
             return False
         return True
+    
+    # -----------------------SALON-----------------------#
+
+    def limpiarCamposSalon(self):
+        self.comboEdificioSalon.set("Seleccione")
+        self.txAula.delete(0, 'end')
+    
+    def guardarSalon(self):
+        if self.validarCamposSalon():
+            salon = {
+                'edificio': self.comboEdificioSalon.get(),
+                'nombre': self.txAula.get()
+            }
+            self.salones.save(salon)
+    
+    def buscarSalon(self):
+        salon_id = self.txIdBuscarSalon.get()
+        if salon_id:
+            salon = self.salones.search(salon_id)
+            if salon:
+                self.comboEdificioSalon.set(salon[2])
+                self.txAula.delete(0, 'end')
+                self.txAula.insert(0, salon[1])
+            else:
+                messagebox.showerror("Error", "Salon no encontrado")
+    
+    def editarSalon(self):
+        if self.validarCamposSalon():
+            salon = {
+                'edificio': self.comboEdificioSalon.get(),
+                'nombre': self.txAula.get()
+            }
+            self.salones.edit(salon)
+    
+    def eliminarSalon(self):
+        salon_id = self.txIdBuscarSalon.get()
+        if salon_id:
+            self.salones.remove(salon_id)
+            self.limpiarCamposSalon()
+    
+    def cargarSalones(self):
+        db = dbEscolar()
+        conn = db.con.open()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT salon_id, nombre FROM salones")
+            Salones = cursor.fetchall()
+            self.listaSalones = {nombre: salon_id for salon_id, nombre in Salones}
+            self.salonComboGrupo['values'] = list(self.listaSalones.keys())
+            db.con.close()
+    
+    def actualizarSalonesGrupo(self, event):
+        aulaSalon = self.salonComboGrupo.get()
+        salonID = self.listaSalones.get(aulaSalon, "")
+        
+    def validarCamposSalon(self):
+        if self.comboEdificioSalon.get() == "Seleccione" or not self.txAula.get():
+            messagebox.showerror("Error", "Faltan Campos por llenar")
+            return False
+        return True
+    
+    # -----------------------CARRERA-----------------------#
+
+    def limpiarCamposCarrera(self):
+        self.comboNumSemestres.set("Seleccione")
+        self.txNombreCarrera.delete(0, 'end')
+    
+    def guardarCarrera(self):
+        if self.validarCamposCarrera():
+            carrera = {
+                'nombre': self.txNombreCarrera.get(),
+                'num_semestres': self.comboNumSemestres.get()
+            }
+            self.carreras.save(carrera)
+    
+    def buscarCarrera(self):
+        carrera_id = self.txIdBuscarCarrera.get()
+        if carrera_id:
+            carrera = self.carreras.search(carrera_id)
+            if carrera:
+                self.comboNumSemestres.set(carrera[2])
+                self.txNombreCarrera.delete(0, 'end')
+                self.txNombreCarrera.insert(0, carrera[1])
+            else:
+                messagebox.showerror("Error", "Carrera no encontrada")
+    
+    def editarCarrera(self):
+        if self.validarCamposCarrera():
+            carrera = {
+                'nombre': self.txNombreCarrera.get(),
+                'num_semestres': self.comboNumSemestres.get()
+            }
+            self.carreras.edit(carrera)
+    
+    def eliminarCarrera(self):
+        carrera_id = self.txIdBuscarCarrera.get()
+        if carrera_id:
+            self.carreras.remove(carrera_id)
+            self.limpiarCamposCarrera()
+    
+    def validarCamposCarrera(self):
+        if self.comboNumSemestres.get() == "Seleccione" or not self.txNombreCarrera.get():
+            messagebox.showerror("Error", "Faltan Campos por llenar")
+            return False
+        return True
+    
+    def cargarCarreraAlumno(self):
+        db = dbEscolar()
+        conn = db.con.open()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT carrera_id, nombre FROM carreras")
+            carreras = cursor.fetchall()
+            self.listaCarreraAlumno = {nombre: carrera_id for carrera_id, nombre in carreras}
+            self.carreraComboAlumno['values'] = list(self.listaCarreraAlumno.keys())
+            db.con.close()
+    
+    def actualizarCarreraAlumno(self, event):
+        carreraAlumno = self.carreraComboAlumno.get()
+        carreraAlmID = self.listaCarreraAlumno.get(carreraAlumno, "")
+    
+    def cargarCarreraProfe(self):
+        db = dbEscolar()
+        conn = db.con.open()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT carrera_id, nombre FROM carreras")
+            carreras = cursor.fetchall()
+            self.listaCarreraProfe = {nombre: carrera_id for carrera_id, nombre in carreras}
+            self.carreraComboMaestro['values'] = list(self.listaCarreraProfe.keys())
+            db.con.close()
+    
+    def actualizarCarreraProfe(self, event):
+        carreraProfe = self.carreraComboMaestro.get()
+        carreraProfID = self.listaCarreraProfe.get(carreraProfe, "")
+    
+    def cargarCarreraMateria(self):
+        db = dbEscolar()
+        conn = db.con.open()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT carrera_id, nombre FROM carreras")
+            carreras = cursor.fetchall()
+            self.listaCarreraMateria = {nombre: carrera_id for carrera_id, nombre in carreras}
+            self.carreraComboMateria['values'] = list(self.listaCarreraMateria.keys())
+            db.con.close()
+    
+    def actualizarCarreraMateria(self, event):
+        carreraMateria = self.carreraComboMateria.get()
+        carreraMatID = self.listaCarreraMateria.get(carreraMateria, "")
+    
+    def cargarCarreraGrupo(self):
+        db = dbEscolar()
+        conn = db.con.open()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT carrera_id, nombre FROM carreras")
+            carreras = cursor.fetchall()
+            self.listaCarreraGrupo = {nombre: carrera_id for carrera_id, nombre in carreras}
+            self.carreraComboGrupo['values'] = list(self.listaCarreraGrupo.keys())
+            db.con.close()
+    
+    def actualizarCarreraGrupo(self, event):
+        carreraGrupo = self.carreraComboGrupo.get()
+        carreraGrupoID = self.listaCarreraGrupo.get(carreraGrupo, "")
 
 if __name__ == "__main__":
     root = tk.Tk()
