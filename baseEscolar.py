@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 import mysql.connector
 from mysql.connector import Error
 #warn: Si se quiere ver los comentarios dinamicamente, instale 'BetterComments' en Visual Studio Code
-#warn 2: Si se quiere obtener la base de datos, abra este github: 
+#warn 2: Si se quiere obtener la base de datos, abra este github: https://github.com/AlanArenas197/interfazProyectoFinalIS
 
 class Conexion:
     def __init__(self):
@@ -166,19 +166,49 @@ class Alumnos:
         finally:
             if conn.is_connected():
                 cursor.close()
+    
+    def verifyCupo(self, grupo_id):
+        conn = self.con.open()
+        if conn:
+            cursor = conn.cursor()
+            sql = "SELECT max_alumnos, alum_reg FROM grupos WHERE grupo_id = %s"
+            cursor.execute(sql, (grupo_id,))
+            grupo = cursor.fetchone()
+            if grupo:
+                max_alumnos, alum_reg = grupo
+                return alum_reg < max_alumnos
+            else:
+                messagebox.showerror("Error", "El grupo no existe.")
+        return False
+    
+    def updateGroups(self, grupo_id, incrementar=True):
+        conn = self.con.open()
+        if conn:
+            cursor = conn.cursor()
+            sql = "UPDATE grupos SET alum_reg = alum_reg + %s WHERE grupo_id = %s"
+            try:
+                cursor.execute(sql, (1 if incrementar else -1, grupo_id))
+                conn.commit()
+            except Error as e:
+                messagebox.showerror("Error", f"Error al actualizar alumnos registrados: {e}")
 
     def save(self, alumno):
         conn = self.con.open()
         if conn:
             cursor = conn.cursor()
+            grupo_id = alumno['grupo']
             if self.email(alumno['email']):
                 messagebox.showerror("Error", "El email ya está registrado.")
                 return
-            sql = "INSERT INTO alumnos (nombre, apaterno, amaterno, email, estado, fecha_nac, carrera, materia, password) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
-            datos = (alumno['nombre'], alumno['apaterno'], alumno['amaterno'], alumno['email'], alumno['estado'], alumno['fecha_nac'], alumno['carrera'], alumno['materia'], alumno['password'])
+            if not self.verifyCupo(grupo_id):
+                messagebox.showerror("Error", "El grupo ya alcanzó el máximo de alumnos permitidos.")
+                return
+            sql = "INSERT INTO alumnos (nombre, apaterno, amaterno, email, estado, fecha_nac, carrera, materia, password, grupo) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            datos = (alumno['nombre'], alumno['apaterno'], alumno['amaterno'], alumno['email'], alumno['estado'], alumno['fecha_nac'], alumno['carrera'], alumno['materia'], alumno['password'], alumno['grupo'])
             try:
                 cursor.execute(sql, datos)
                 conn.commit()
+                self.updateGroups(grupo_id, incrementar=True)
                 messagebox.showinfo("Éxito", "Alumno guardado correctamente.")
             except Error as e:
                 messagebox.showerror("Error", f"Error al guardar alumno: {e}")
@@ -204,16 +234,35 @@ class Alumnos:
         conn = self.con.open()
         if conn:
             cursor = conn.cursor()
-            sql = """UPDATE alumnos 
-                     SET nombre = %s, apaterno = %s, amaterno = %s, email = %s, estado = %s, fecha_nac = %s, carrera = %s, materia = %s, password = %s
-                     WHERE alumnos_id = %s"""
-            datos = (alumno['nombre'], alumno['apaterno'], alumno['amaterno'], alumno['email'], alumno['estado'], alumno['fecha_nac'], alumno['carrera'], alumno['materia'], alumno['password'], alumno['alumnos_id'])
+            sql_buscar = "SELECT grupo FROM alumnos WHERE alumnos_id = %s"
+            cursor.execute(sql_buscar, (alumno['alumnos_id'],))
+            grupo_actual = cursor.fetchone()
+            if grupo_actual:
+                grupo_actual = grupo_actual[0]
+                grupo_nuevo = alumno['grupo']
+                if grupo_actual != grupo_nuevo:
+                    if not self.verifyCupo(grupo_nuevo):
+                        messagebox.showerror("Error", "El grupo nuevo ya alcanzó el máximo de alumnos permitidos.")
+                        return
+                    self.updateGroups(grupo_actual, incrementar=False)
+                    self.updateGroups(grupo_nuevo, incrementar=True)
+
+            sql = """
+                UPDATE alumnos SET nombre = %s, apaterno = %s, amaterno = %s, email = %s, 
+                estado = %s, fecha_nac = %s, carrera = %s, materia = %s, password = %s, grupo = %s 
+                WHERE alumnos_id = %s
+            """
+            datos = (
+                alumno['nombre'], alumno['apaterno'], alumno['amaterno'], alumno['email'], 
+                alumno['estado'], alumno['fecha_nac'], alumno['carrera'], alumno['materia'], 
+                alumno['password'], grupo_nuevo, alumno['alumnos_id']
+            )
             try:
                 cursor.execute(sql, datos)
                 conn.commit()
-                messagebox.showinfo("Éxito", "Alumno editado correctamente.")
+                messagebox.showinfo("Éxito", "Alumno actualizado correctamente.")
             except Error as e:
-                messagebox.showerror("Error", f"Error al editar alumno: {e}")
+                messagebox.showerror("Error", f"Error al actualizar al alumno: {e}")
             finally:
                 self.con.close()
 
@@ -262,8 +311,8 @@ class Maestros:
             if self.email(maestro['email']):
                 messagebox.showerror("Error", "El email ya está registrado.")
                 return
-            sql = "INSERT INTO maestros (nombre, apaterno, amaterno, email, carrera, materia, grado_estudios) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-            datos = (maestro['nombre'], maestro['apaterno'], maestro['amaterno'], maestro['email'], maestro['carrera'], maestro['materia'], maestro['grado_estudios'])
+            sql = "INSERT INTO maestros (nombre, apaterno, amaterno, email, carrera, materia, grado_estudios, grupo) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+            datos = (maestro['nombre'], maestro['apaterno'], maestro['amaterno'], maestro['email'], maestro['carrera'], maestro['materia'], maestro['grado_estudios'], maestro['grupo'])
             try:
                 cursor.execute(sql, datos)
                 conn.commit()
@@ -293,9 +342,9 @@ class Maestros:
         if conn:
             cursor = conn.cursor()
             sql = """UPDATE maestros 
-                     SET nombre = %s, apaterno = %s, amaterno = %s, email = %s, carrera = %s, materia = %s, grado_estudios = %s
+                     SET nombre = %s, apaterno = %s, amaterno = %s, email = %s, carrera = %s, materia = %s, grado_estudios = %s, grupo = %s
                      WHERE maestro_id = %s"""
-            datos = (maestro['nombre'], maestro['apaterno'], maestro['amaterno'], maestro['email'], maestro['carrera'], maestro['materia'], maestro['grado_estudios'], maestro['maestro_id'])
+            datos = (maestro['nombre'], maestro['apaterno'], maestro['amaterno'], maestro['email'], maestro['carrera'], maestro['materia'], maestro['grado_estudios'], maestro['grupo'], maestro['maestro_id'])
             try:
                 cursor.execute(sql, datos)
                 conn.commit()
@@ -438,8 +487,8 @@ class Grupos:
             if self.availability(grupos['horario'], grupos['salon'], grupos['nombre']):
                 messagebox.showerror("Error", "El grupo ya está registrado.")
                 return
-            sql = "INSERT INTO grupos (nombre, fecha, carrera, materia, maestro, salon, horario, semestre, max_alumnos) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
-            datos = (grupos['nombre'], grupos['fecha'], grupos['carrera'], grupos['materia'], grupos['maestro'], grupos['salon'], grupos['horario'], grupos['semestre'], grupos['max_alumnos'])
+            sql = "INSERT INTO grupos (nombre, fecha, carrera, materia, maestro, salon, horario, semestre, max_alumnos, alum_reg) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            datos = (grupos['nombre'], grupos['fecha'], grupos['carrera'], grupos['materia'], grupos['maestro'], grupos['salon'], grupos['horario'], grupos['semestre'], grupos['max_alumnos'], grupos['alum_reg'])
             try:
                 cursor.execute(sql, datos)
                 conn.commit()
@@ -469,9 +518,9 @@ class Grupos:
         if conn:
             cursor = conn.cursor()
             sql = """UPDATE grupos 
-                     SET nombre = %s, fecha = %s, carrera = %s, materia = %s, maestro = %s, salon = %s, horario = %s, semestre = %s, max_alumnos = %s
+                     SET nombre = %s, fecha = %s, carrera = %s, materia = %s, maestro = %s, salon = %s, horario = %s, semestre = %s, max_alumnos = %s, alum_reg = %s
                      WHERE grupo_id = %s"""
-            datos = (grupos['nombre'], grupos['fecha'], grupos['carrera'], grupos['materia'], grupos['maestro'], grupos['salon'], grupos['horario'], grupos['semestre'], grupos['max_alumnos'], grupos['grupo_id'])
+            datos = (grupos['nombre'], grupos['fecha'], grupos['carrera'], grupos['materia'], grupos['maestro'], grupos['salon'], grupos['horario'], grupos['semestre'], grupos['max_alumnos'], grupos['alum_reg'], grupos['grupo_id'])
             try:
                 cursor.execute(sql, datos)
                 conn.commit()
@@ -825,8 +874,6 @@ class Application(ttk.Frame):
         self.salones = Salones(conexion)
         self.carreras = Carreras(conexion)
 
-        #TODO: Carreras, salones, planeacion
-
         self.notebook = ttk.Notebook(self)
      
         #?-----------------------USUARIOS-----------------------#
@@ -952,6 +999,13 @@ class Application(ttk.Frame):
         self.txPasswordAlumno = ttk.Entry(pestanaAlumnos, width=30)
         self.txPasswordAlumno.grid(row=5, column=1, pady=5)
 
+        ttk.Label(pestanaAlumnos, text="Grupo:").grid(row=6, column=0, sticky="e")
+        self.grupoComboAlumno = ttk.Combobox(pestanaAlumnos, values=["Seleccione", "<GRUPOS>"], width=28)
+        self.grupoComboAlumno.grid(row=6, column=1, pady=5)
+        self.grupoComboAlumno.set("Seleccione")
+        self.cargarGrupoAlumno()
+        self.grupoComboAlumno.bind("<<ComboboxSelected>>", self.actualizaGruposAlumno)
+
         self.btnAgregarMateriaAlumno = ttk.Button(pestanaAlumnos, text="Agregar", command=self.agregarMateriaAlumno)
         self.btnAgregarMateriaAlumno.grid(row=5, column=3, padx=5, pady=5)
 
@@ -1024,6 +1078,13 @@ class Application(ttk.Frame):
         ttk.Label(pestanaMaestros, text="Email:").grid(row=4, column=0, sticky="e")
         self.txEmailMaestro = ttk.Entry(pestanaMaestros, width=30)
         self.txEmailMaestro.grid(row=4, column=1, pady=5)
+
+        ttk.Label(pestanaMaestros, text="Grupo:").grid(row=5, column=0, sticky="e")
+        self.grupoComboMaestro = ttk.Combobox(pestanaMaestros, values=["Seleccione", "<GRUPOS>"], width=28)
+        self.grupoComboMaestro.grid(row=5, column=1, pady=5)
+        self.grupoComboMaestro.set("Seleccione")
+        self.cargarGrupoMaestro()
+        self.grupoComboMaestro.bind("<<ComboboxSelected>>", self.actualizaGruposMaestro)
 
         self.btnAgregarMateriaMaestro = ttk.Button(pestanaMaestros, text="Agregar", command=self.agregarMateriaMaestro)
         self.btnAgregarMateriaMaestro.grid(row=5, column=3, padx=5, pady=5)
@@ -1165,12 +1226,16 @@ class Application(ttk.Frame):
         self.maxAlumsComboGrupo.grid(row=5, column=1, pady=5)
         self.maxAlumsComboGrupo.set("Seleccione")
 
-        self.btnAgregarMateriaGrupo = ttk.Button(pestanaGrupos, text="Agregar", command=self.agregarMateriaGrupo)
+        ttk.Label(pestanaGrupos, text="Alumnos Reg.:").grid(row=5, column=2, sticky="e")
+        self.txAlumnosReg = ttk.Entry(pestanaGrupos, width=30)
+        self.txAlumnosReg.grid(row=5, column=3, pady=5)
+
+        """self.btnAgregarMateriaGrupo = ttk.Button(pestanaGrupos, text="Agregar", command=self.agregarMateriaGrupo)
         self.btnAgregarMateriaGrupo.grid(row= 5, column= 3, pady=5)
 
         self.treeMateriaGrupo = ttk.Treeview(pestanaGrupos, columns=("Nombre"), show="headings", height=6)
         self.treeMateriaGrupo.heading("Nombre", text="Nombre")
-        self.treeMateriaGrupo.grid(row=6, column=3, pady=5)
+        self.treeMateriaGrupo.grid(row=6, column=3, pady=5)"""
 
         self.btnNuevoGrupo = ttk.Button(pestanaGrupos, text="Nuevo", command=self.limpiarCamposGrupo)
         self.btnNuevoGrupo.grid(row=8, column=0, padx=10, pady=10, sticky="e")
@@ -1378,7 +1443,8 @@ class Application(ttk.Frame):
             self.limpiarCamposUsuario()
         
     def validarCamposUsuario(self):
-        if self.comboPerfilUsuario.get() == "Seleccione" or not self.txNombreUsuario.get() or not self.txAPaternoUsuario.get() or not self.txAMaternoUsuario.get() or not self.txEmailUsuario.get() or not self.txUsernameUsuario.get() or not self.txPasswordUsuario.get():
+        if self.comboPerfilUsuario.get() == "Seleccione" or not self.txNombreUsuario.get() or not self.txAPaternoUsuario.get() or not self.txAMaternoUsuario.get() or not self.txEmailUsuario.get()\
+            or not self.txUsernameUsuario.get() or not self.txPasswordUsuario.get():
             messagebox.showerror("Error", "Faltan Campos por llenar")
             return False
         return True
@@ -1395,6 +1461,7 @@ class Application(ttk.Frame):
         self.carreraComboAlumno.set("Seleccione")
         self.materiaComboAlumno.set("Seleccione")
         self.txPasswordAlumno.delete(0, 'end')
+        self.grupoComboAlumno.set("Seleccione")
         self.treeMateriaAlumno.delete(*self.treeMateriaAlumno.get_children())
     
     def guardarAlumno(self):
@@ -1413,7 +1480,8 @@ class Application(ttk.Frame):
                 'fecha_nac': self.txFechaAlumno.get(),
                 'carrera': self.carreraComboAlumno.get(),
                 'materia': materias_str,
-                'password': self.txPasswordAlumno.get()
+                'password': self.txPasswordAlumno.get(),
+                'grupo': self.grupoComboAlumno.get()
             }
 
             self.alumnos.save(alumno)
@@ -1436,6 +1504,7 @@ class Application(ttk.Frame):
                 for materia in materias:
                     self.treeMateriaAlumno.insert('', 'end', values=(materia,))
                 self.txPasswordAlumno.insert(0, alumno[9])
+                self.grupoComboAlumno.set(alumno[10])
             else:
                 messagebox.showerror("Error", "Alumno no encontrado")
 
@@ -1456,7 +1525,8 @@ class Application(ttk.Frame):
                 'fecha_nac': self.txFechaAlumno.get(),
                 'carrera': self.carreraComboAlumno.get(),
                 'materia': materias_str,
-                'password': self.txPasswordAlumno.get()
+                'password': self.txPasswordAlumno.get(),
+                'grupo': self.grupoComboAlumno.get()
             }
             self.alumnos.edit(alumno)
             messagebox.showinfo("Éxito", "Alumno editado correctamente")
@@ -1477,9 +1547,25 @@ class Application(ttk.Frame):
                 messagebox.showerror("Error", "La materia ya está en la lista.")
                 return
         self.treeMateriaAlumno.insert('', 'end', values=(materia,))
+
+    def cargarGrupoAlumno(self):
+        db = dbEscolar()
+        conn = db.con.open()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT grupo_id, nombre FROM grupos")
+            grupos = cursor.fetchall()
+            self.listaGrupos = {nombre: grupo_id for grupo_id, nombre in grupos}
+            self.grupoComboAlumno['values'] = list(self.listaGrupos.keys())
+            db.con.close()
+    
+    def actualizaGruposAlumno(self, event):
+        nombreGrupo = self.grupoComboAlumno.get()
+        grupoNombre = self.listaGrupos.get(nombreGrupo, "")
      
     def validarCamposAlumno(self):
-        if self.estadoComboAlumno.get() == "Seleccione" or self.carreraComboAlumno.get() == "Seleccione" or not self.txNombreAlumno.get() or not self.txAPaternoAlumno.get() or not self.txAMaternoAlumno.get() or not self.txEmailAlumno.get() or not self.txFechaAlumno.get() or not self.txPasswordAlumno.get():
+        if self.estadoComboAlumno.get() == "Seleccione" or self.carreraComboAlumno.get() == "Seleccione" or not self.txNombreAlumno.get() or not self.txAPaternoAlumno.get()\
+            or not self.txAMaternoAlumno.get() or not self.txEmailAlumno.get() or not self.txFechaAlumno.get() or not self.txPasswordAlumno.get() or self.grupoComboAlumno.get() == "Seleccione":
             messagebox.showerror("Error", "Faltan Campos por llenar")
             return False
         return True
@@ -1494,6 +1580,7 @@ class Application(ttk.Frame):
         self.carreraComboMaestro.set("Seleccione")
         self.materiaComboMaestro.set("Seleccione")
         self.txGradoEstudiosMaestro.delete(0, 'end')
+        self.grupoComboMaestro.set("Seleccione")
         self.treeMateriaMaestro.delete(*self.treeMateriaMaestro.get_children())
     
     def guardarMaestro(self):
@@ -1511,6 +1598,7 @@ class Application(ttk.Frame):
                 'grado_estudios': self.txGradoEstudiosMaestro.get(),
                 'carrera': self.carreraComboAlumno.get(),
                 'materia': materias_str,
+                'grupo': self.grupoComboMaestro.get()
             }
             self.maestros.save(maestro)
             messagebox.showinfo("Éxito", "Maestro guardado correctamente")
@@ -1530,6 +1618,7 @@ class Application(ttk.Frame):
                 for materia in materias:
                     self.treeMateriaMaestro.insert('', 'end', values=(materia,))
                 self.txGradoEstudiosMaestro.insert(0, maestro[7])
+                self.grupoComboMaestro.set(maestro[8])
             else:
                 messagebox.showerror("Error", "Maestro no encontrado")
     
@@ -1549,6 +1638,7 @@ class Application(ttk.Frame):
                 'grado_estudios': self.txGradoEstudiosMaestro.get(),
                 'carrera': self.carreraComboAlumno.get(),
                 'materia': materias_str,
+                'grupo': self.grupoComboMaestro.get()
             }
             self.maestros.edit(maestro)
             messagebox.showinfo("Éxito", "Maestro editado correctamente")
@@ -1573,6 +1663,21 @@ class Application(ttk.Frame):
     def actualizarMaestroGrupo(self, event):
         nombreMaestro = self.maestrosComboGrupo.get()
         maestroID = self.listaMaestros.get(nombreMaestro, "")
+
+    def cargarGrupoMaestro(self):
+        db = dbEscolar()
+        conn = db.con.open()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT grupo_id, nombre FROM grupos")
+            grupos = cursor.fetchall()
+            self.listaGrupos = {nombre: grupo_id for grupo_id, nombre in grupos}
+            self.grupoComboMaestro['values'] = list(self.listaGrupos.keys())
+            db.con.close()
+    
+    def actualizaGruposMaestro(self, event):
+        nombreGrupo = self.grupoComboMaestro.get()
+        maestroID = self.listaGrupos.get(nombreGrupo, "")
     
     def agregarMateriaMaestro(self):
         materia = self.materiaComboMaestro.get()
@@ -1586,7 +1691,8 @@ class Application(ttk.Frame):
         self.treeMateriaMaestro.insert('', 'end', values=(materia,))
         
     def validarCamposMaestro(self):
-        if self.carreraComboMaestro.get() == "Seleccione" or not self.txNombreMaestro.get() or not self.txAPaternoMaestro.get() or not self.txAMaternoMaestro.get() or not self.txEmailMaestro.get() or not self.txGradoEstudiosMaestro.get():
+        if self.carreraComboMaestro.get() == "Seleccione" or not self.txNombreMaestro.get() or not self.txAPaternoMaestro.get() or not self.txAMaternoMaestro.get()\
+                or not self.txEmailMaestro.get() or not self.txGradoEstudiosMaestro.get() or self.grupoComboMaestro.get() == "Seleccione":
             messagebox.showerror("Error", "Faltan Campos por llenar")
             return False
         return True
@@ -1705,25 +1811,27 @@ class Application(ttk.Frame):
         self.maestrosComboGrupo.set("Seleccione")
         self.materiaComboGrupo.set("Seleccione")
         self.maxAlumsComboGrupo.set("Seleccione")
-        self.treeMateriaGrupo.delete(*self.treeMateriaGrupo.get_children())
+        self.txAlumnosReg.delete(0, 'end')
+        #!self.treeMateriaGrupo.delete(*self.treeMateriaGrupo.get_children())
     
     def guardarGrupo(self):
         if self.validarCamposGrupo():
-            materias = [self.treeMateriaGrupo.item(item, 'values')[0] for item in self.treeMateriaGrupo.get_children()]
+            """materias = [self.treeMateriaGrupo.item(item, 'values')[0] for item in self.treeMateriaGrupo.get_children()]
             if not materias:
                 messagebox.showerror("Error", "Debe agregar al menos una materia.")
                 return
-            materias_str = ', '.join(materias)
+            materias_str = ', '.join(materias)"""
             grupo = {
                 'nombre': self.txNombreGrupo.get(),
                 'fecha': self.txFechaGrupo.get(),
                 'carrera': self.carreraComboGrupo.get(),
-                'materia': materias_str,
+                'materia': self.materiaComboGrupo.get(),
                 'maestro': self.maestrosComboGrupo.get(),
                 'salon': self.salonComboGrupo.get(),
                 'horario': self.horarioComboGrupo.get(),
                 'semestre': self.txSemestreGrupo.get(),
-                'max_alumnos': self.maxAlumsComboGrupo.get()
+                'max_alumnos': self.maxAlumsComboGrupo.get(),
+                'alum_reg': self.txAlumnosReg.get()
             }
             self.grupos.save(grupo)
     
@@ -1736,35 +1844,35 @@ class Application(ttk.Frame):
                 self.txNombreGrupo.insert(0, grupo[1])
                 self.txFechaGrupo.insert(0, grupo[2])
                 self.carreraComboGrupo.set(grupo[3])
-                materias = grupo[4].split(', ') if grupo[4] else []
-                for materia in materias:
-                    self.treeMateriaGrupo.insert('', 'end', values=(materia,))
+                self.materiaComboGrupo.set(grupo[4])
                 self.maestrosComboGrupo.set(grupo[5])
                 self.salonComboGrupo.set(grupo[6])
                 self.horarioComboGrupo.set(grupo[7])
                 self.txSemestreGrupo.insert(0, grupo[8])
                 self.maxAlumsComboGrupo.set(grupo[9])
+                self.txAlumnosReg.insert(0, grupo[10])
             else:
                 messagebox.showerror("Error", "Grupo no encontrado")
     
     def editarGrupo(self):
         if self.validarCamposGrupo():
-            materias = [self.treeMateriaGrupo.item(item, 'values')[0] for item in self.treeMateriaGrupo.get_children()]
+            """materias = [self.treeMateriaGrupo.item(item, 'values')[0] for item in self.treeMateriaGrupo.get_children()]
             if not materias:
                 messagebox.showerror("Error", "Debe agregar al menos una materia.")
                 return
-            materias_str = ', '.join(materias)
+            materias_str = ', '.join(materias)"""
             grupo = {
                 'grupo_id': self.txIdGrupoBuscar.get(),
                 'nombre': self.txNombreGrupo.get(),
                 'fecha': self.txFechaGrupo.get(),
                 'carrera': self.carreraComboGrupo.get(),
-                'materia': materias_str,
+                'materia': self.materiaComboGrupo.get(),
                 'maestro': self.maestrosComboGrupo.get(),
                 'salon': self.salonComboGrupo.get(),
                 'horario': self.horarioComboGrupo.get(),
                 'semestre': self.txSemestreGrupo.get(),
-                'max_alumnos': self.maxAlumsComboGrupo.get()
+                'max_alumnos': self.maxAlumsComboGrupo.get(),
+                'alum_reg': self.txAlumnosReg.get()
             }
             self.grupos.edit(grupo)
     
@@ -1786,7 +1894,9 @@ class Application(ttk.Frame):
         self.treeMateriaGrupo.insert('', 'end', values=(materia,))
         
     def validarCamposGrupo(self):
-        if self.salonComboGrupo.get() == "Seleccione" or self.horarioComboGrupo.get() == "Seleccione" or self.carreraComboGrupo.get() == "Seleccione" or self.maestrosComboGrupo.get() == "Seleccione" or self.maxAlumsComboGrupo.get() == "Seleccione" or not self.txNombreGrupo.get() or not self.txFechaGrupo.get() or not self.txSemestreGrupo.get():
+        if self.salonComboGrupo.get() == "Seleccione" or self.horarioComboGrupo.get() == "Seleccione" or self.carreraComboGrupo.get() == "Seleccione"\
+            or self.maestrosComboGrupo.get() == "Seleccione" or self.maxAlumsComboGrupo.get() == "Seleccione" or self.materiaComboGrupo.get() == "Seleccione"\
+                or not self.txNombreGrupo.get() or not self.txFechaGrupo.get() or not self.txSemestreGrupo.get() or not self.txAlumnosReg.get():
             messagebox.showerror("Error", "Faltan Campos por llenar")
             return False
         return True
