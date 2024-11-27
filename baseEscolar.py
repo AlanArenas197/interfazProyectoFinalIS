@@ -167,45 +167,69 @@ class Alumnos:
             if conn.is_connected():
                 cursor.close()
     
-    def verifyCupo(self, grupo_id):
+    def verifyCupo(self, nombre):
         conn = self.con.open()
         if conn:
-            cursor = conn.cursor()
-            sql = "SELECT max_alumnos, alum_reg FROM grupos WHERE grupo_id = %s"
-            cursor.execute(sql, (grupo_id,))
-            grupo = cursor.fetchone()
-            if grupo:
-                max_alumnos, alum_reg = grupo
-                return alum_reg < max_alumnos
-            else:
-                messagebox.showerror("Error", "El grupo no existe.")
-        return False
-    
-    def updateGroups(self, grupo_id, incrementar=True):
-        conn = self.con.open()
-        if conn:
-            cursor = conn.cursor()
-            sql = "UPDATE grupos SET alum_reg = alum_reg + %s WHERE grupo_id = %s"
             try:
-                cursor.execute(sql, (1 if incrementar else -1, grupo_id))
+                cursor = conn.cursor()
+                sql = "SELECT max_alumnos, alum_reg FROM grupos WHERE nombre = %s"
+                cursor.execute(sql, (nombre,))
+                grupo = cursor.fetchone()
+                if grupo:
+                    max_alumnos, alum_reg = grupo
+                    if int(alum_reg) < int(max_alumnos):
+                        return True
+                    else:
+                        return False
+                else:
+                    messagebox.showerror("Error", "El grupo no existe.")
+                    return False
+            except Error as e:
+                messagebox.showerror("Error", f"Error al verificar el cupo del grupo: {e}")
+                return False
+            finally:
+                if conn.is_connected():
+                    cursor.close()
+        else:
+            messagebox.showerror("Error de Conexión", "No se pudo conectar a la base de datos.")
+            return False
+    
+    def updateGroups(self, nombre, incrementar=True):
+        conn = self.con.open()
+        if conn:
+            try:
+                cursor = conn.cursor()
+                sql = "UPDATE grupos SET alum_reg = alum_reg + %s WHERE nombre = %s"
+                cursor.execute(sql, (1 if incrementar else -1, nombre))
                 conn.commit()
             except Error as e:
                 messagebox.showerror("Error", f"Error al actualizar alumnos registrados: {e}")
+            finally:
+                if conn.is_connected():
+                    cursor.close()
 
     def save(self, alumno):
         conn = self.con.open()
         if conn:
-            cursor = conn.cursor()
-            grupo_id = alumno['grupo']
-            if self.email(alumno['email']):
-                messagebox.showerror("Error", "El email ya está registrado.")
-                return
-            if not self.verifyCupo(grupo_id):
-                messagebox.showerror("Error", "El grupo ya alcanzó el máximo de alumnos permitidos.")
-                return
-            sql = "INSERT INTO alumnos (nombre, apaterno, amaterno, email, estado, fecha_nac, carrera, materia, password, grupo) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-            datos = (alumno['nombre'], alumno['apaterno'], alumno['amaterno'], alumno['email'], alumno['estado'], alumno['fecha_nac'], alumno['carrera'], alumno['materia'], alumno['password'], alumno['grupo'])
             try:
+                cursor = conn.cursor()
+                grupo_id = alumno['grupo']
+                if self.email(alumno['email']):
+                    messagebox.showerror("Error", "El email ya está registrado.")
+                    return
+                if not self.verifyCupo(grupo_id):
+                    messagebox.showerror("Error", "El grupo ya alcanzó el máximo de alumnos permitidos.")
+                    return
+                sql = """
+                    INSERT INTO alumnos 
+                    (nombre, apaterno, amaterno, email, estado, fecha_nac, carrera, materia, password, grupo) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                datos = (
+                    alumno['nombre'], alumno['apaterno'], alumno['amaterno'], alumno['email'], 
+                    alumno['estado'], alumno['fecha_nac'], alumno['carrera'], alumno['materia'], 
+                    alumno['password'], grupo_id
+                )
                 cursor.execute(sql, datos)
                 conn.commit()
                 self.updateGroups(grupo_id, incrementar=True)
@@ -213,7 +237,8 @@ class Alumnos:
             except Error as e:
                 messagebox.showerror("Error", f"Error al guardar alumno: {e}")
             finally:
-                self.con.close()
+                if conn.is_connected():
+                    cursor.close()
 
     def search(self, alumnos_id):
         conn = self.con.open()
@@ -817,6 +842,21 @@ class Carreras:
             finally:
                 self.con.close()
 
+#!-----------------------PLANEACIÓN-----------------------#
+
+class Planeacion:
+    def __init__(self, conexion):
+        self.con = conexion
+
+    def groups(self):
+        conn = self.con.open()
+        cursor = conn.cursor()
+        cursor.execute("SELECT nombre, salon, materia, maestro, horario FROM grupos ORDER BY horario")
+        planHorario = cursor.fetchall()
+        conn.close()
+        return planHorario
+
+
 #?-----------------------LOGIN WINDOW-----------------------#
 
 class LoginWindow(tk.Toplevel):
@@ -873,6 +913,7 @@ class Application(ttk.Frame):
         self.horarios = Horarios(conexion)
         self.salones = Salones(conexion)
         self.carreras = Carreras(conexion)
+        self.planeacion = Planeacion(conexion)
 
         self.notebook = ttk.Notebook(self)
      
@@ -1378,6 +1419,37 @@ class Application(ttk.Frame):
                 
         self.notebook.add(pestanaCarrera, text="Carrera")
 
+        #?-----------------------PLANEACIÓN DE HORARIOS-----------------------#
+
+        pestanaPlaneacion = ttk.Frame(self.notebook)
+        pestanaPlaneacion.grid_columnconfigure(0, weight=1)
+        pestanaPlaneacion.grid_columnconfigure(1, weight=1)
+
+        self.btnActualizar = ttk.Button(pestanaPlaneacion, text="Actualizar", command=self.actualizarDatosPlan)
+        self.btnActualizar.pack(pady=10)
+
+        self.treePlaneacion = ttk.Treeview(pestanaPlaneacion, columns=("nombre", "salon", "materia", "maestro", "horario"), show="headings")
+        self.treePlaneacion.column("nombre", width=50)
+        self.treePlaneacion.heading("nombre", text="Nombre")
+
+        self.treePlaneacion.column("salon", width=50)
+        self.treePlaneacion.heading("salon", text="Salón")
+
+        self.treePlaneacion.column("materia", width=50)
+        self.treePlaneacion.heading("materia", text="Materia")
+
+        self.treePlaneacion.column("maestro", width=50)
+        self.treePlaneacion.heading("maestro", text="Maestro")
+
+        self.treePlaneacion.column("horario", width=50)
+        self.treePlaneacion.heading("horario", text="Horario")
+
+        self.treePlaneacion.pack(fill=tk.BOTH, expand=True)
+    
+        self.notebook.add(pestanaPlaneacion, text="Planeación")
+
+        #?-----------------------CONFIG DEL NOTEBOOK-----------------------#
+
         self.notebook.pack(expand=True, fill='both', padx=10, pady=10)
         self.pack()
 
@@ -1596,7 +1668,7 @@ class Application(ttk.Frame):
                 'amaterno': self.txAMaternoMaestro.get(),
                 'email': self.txEmailMaestro.get(),
                 'grado_estudios': self.txGradoEstudiosMaestro.get(),
-                'carrera': self.carreraComboAlumno.get(),
+                'carrera': self.carreraComboMaestro.get(),
                 'materia': materias_str,
                 'grupo': self.grupoComboMaestro.get()
             }
@@ -1636,7 +1708,7 @@ class Application(ttk.Frame):
                 'amaterno': self.txAMaternoMaestro.get(),
                 'email': self.txEmailMaestro.get(),
                 'grado_estudios': self.txGradoEstudiosMaestro.get(),
-                'carrera': self.carreraComboAlumno.get(),
+                'carrera': self.carreraComboMaestro.get(),
                 'materia': materias_str,
                 'grupo': self.grupoComboMaestro.get()
             }
@@ -1961,7 +2033,7 @@ class Application(ttk.Frame):
             return False
         return True
     
-    # -----------------------SALON-----------------------#
+    #-----------------------SALON-----------------------#
 
     def limpiarCamposSalon(self):
         self.comboEdificioSalon.set("Seleccione")
@@ -2125,6 +2197,18 @@ class Application(ttk.Frame):
     def actualizarCarreraGrupo(self, event):
         carreraGrupo = self.carreraComboGrupo.get()
         carreraGrupoID = self.listaCarreraGrupo.get(carreraGrupo, "")
+    
+    #-----------------------PLANEACIÓN-----------------------#
+
+    def actualizarDatosPlan(self):
+        for item in self.treePlaneacion.get_children():
+            self.treePlaneacion.delete(item)
+
+        planHorario = self.planeacion.groups()
+        planHorario_ordenado = sorted(planHorario, key=lambda x: x[4])
+
+        for row in planHorario_ordenado:
+            self.treePlaneacion.insert("", tk.END, values=row)
 
 if __name__ == "__main__":
     root = tk.Tk()
